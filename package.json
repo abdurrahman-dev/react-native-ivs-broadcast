@@ -1,6 +1,6 @@
 {
-    "name": "react-native-ivs-broadcast",
-    "version": "1.0.0",
+    "name": "@abdurrahman-dev/react-native-ivs-broadcast",
+    "version": "0.1.1",
     "description": "React Native bridge for Amazon IVS Broadcast SDK (Android 1.37.1, iOS 1.37.0)",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
@@ -21,10 +21,23 @@
     "license": "MIT",
     "repository": {
         "type": "git",
-        "url": ""
+        "url": "https://github.com/abdurrahman-dev/react-native-ivs-broadcast.git"
     },
+    "bugs": {
+        "url": "https://github.com/abdurrahman-dev/react-native-ivs-broadcast/issues"
+    },
+    "homepage": "https://github.com/abdurrahman-dev/react-native-ivs-broadcast#readme",
     "peerDependencies": {
         "react-native": ">=0.60.0"
+    },
+    "react-native": {
+        "android": {
+            "sourceDir": "./android",
+            "packageImportPath": "import com.reactnativeivsbroadcast.IVSBroadcastPackage;"
+        },
+        "ios": {
+            "podspecPath": "./ios/IVSBroadcast.podspec"
+        }
     },
     "devDependencies": {
         "@types/react-native": "^0.70.0",

@@ -1,4 +1,4 @@
-# react-native-ivs-broadcast
+# @abdurrahman-dev/react-native-ivs-broadcast
 
 React Native için Amazon Interactive Video Service (IVS) Broadcast SDK köprü paketi. Bu paket, Amazon IVS Broadcast SDK'nın native yeteneklerini React Native projelerinde kullanmanızı sağlar.
 
@@ -18,13 +18,13 @@ React Native için Amazon Interactive Video Service (IVS) Broadcast SDK köprü 
 ### npm
 
 ```bash
-npm install react-native-ivs-broadcast
+npm install @abdurrahman-dev/react-native-ivs-broadcast
 ```
 
 ### yarn
 
 ```bash
-yarn add react-native-ivs-broadcast
+yarn add @abdurrahman-dev/react-native-ivs-broadcast
 ```
 
 ## Platform Kurulumu
@@ -86,7 +86,7 @@ cd ios && pod install && cd ..
 ### Temel Kullanım
 
 ```typescript
-import IVSBroadcast from 'react-native-ivs-broadcast';
+import IVSBroadcast from '@abdurrahman-dev/react-native-ivs-broadcast';
 
 // Session oluştur
 const session = await IVSBroadcast.createSession({
