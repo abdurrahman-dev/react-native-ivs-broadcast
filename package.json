@@ -1,6 +1,6 @@
 {
     "name": "@abdurrahman-dev/react-native-ivs-broadcast",
-    "version": "0.1.1",
+    "version": "0.1.3",
     "description": "React Native bridge for Amazon IVS Broadcast SDK (Android 1.37.1, iOS 1.37.0)",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
