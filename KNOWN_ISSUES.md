@@ -7,29 +7,41 @@
 
 2. **Android getDevices Metodu** - Düzeltildi
    - `listAvailableDevices` metodunun `DeviceDescriptor` döndürdüğü dikkate alınarak düzeltildi
-   - Artık `addDevice` metodu kullanılarak device'lar session'a ekleniyor
+   - Artık `attachDevice` metodu kullanılarak device'lar session'a ekleniyor
+
+3. **Android ReadableMap Null Safety** - Düzeltildi
+   - `hasKey` kontrolü ile güvenli değer okuma eklendi
+
+4. **iOS Podspec Path Sorunu** - Düzeltildi
+   - `source_files` path'i düzeltildi
+
+5. **Android Build Gradle Fallback** - Düzeltildi
+   - SDK version değerleri için fallback eklendi
+   - Java 11 desteği eklendi
+
+6. **iOS Device Yönetimi** - Düzeltildi
+   - `attachDevice` ve `exchangeOldDevice` metodları kullanılıyor
+   - Main thread dispatch eklendi
+
+7. **Preview View Component** - Eklendi
+   - Android ve iOS için native preview view eklendi
+   - React Native `PreviewView` component'i oluşturuldu
 
 ## ⚠️ Potansiyel Sorunlar
 
-### 1. Android Native Modül
-- `listAvailableDevices` metodunun döndürdüğü tip kontrol edilmeli
-- `addDevice` metodunun null döndürebileceği durumlar handle edilmeli
-- Session başlatılmadan önce device'ların eklenmesi gerekebilir
+### 1. Pause/Resume
+- IVS SDK'da doğrudan pause/resume özelliği yok
+- Şu an bu metodlar placeholder olarak çalışıyor
 
-### 2. iOS Native Modül
-- `startWithURL` metodunun doğru kullanımı kontrol edilmeli
-- Device yönetimi iOS'ta farklı olabilir
+### 2. updateVideoConfig / updateAudioConfig
+- IVS SDK session oluşturulduktan sonra config değişikliğine izin vermiyor
+- Bu metodlar şu an sadece kabul ediyor ama değişiklik yapmıyor
 
 ## 📋 Eksik Özellikler
 
 Aşağıdaki özellikler Amazon IVS Broadcast SDK'da mevcut ancak bu pakette henüz implement edilmemiştir:
 
-### 1. Preview View Component
-- **Android**: `BroadcastSession` preview view desteği
-- **iOS**: `IVSPreviewView` component desteği
-- **Durum**: Eksik - React Native View component olarak implement edilmeli
-
-### 2. Custom Video Sources
+### 1. Custom Video Sources
 - **Android**: Custom `ImageDevice` veya `CameraDevice` desteği
 - **iOS**: Custom video source desteği
 - **Durum**: Eksik - Native modüllerden custom source ekleme API'leri eksik
@@ -40,54 +52,17 @@ Aşağıdaki özellikler Amazon IVS Broadcast SDK'da mevcut ancak bu pakette hen
 - `removeDevice` - Cihaz kaldırma
 - **Durum**: Kısmen mevcut - Sadece internal kullanımda, public API olarak expose edilmemiş
 
-### 4. Advanced Video Configuration
-- Video encoder seçimi (hardware/software)
-- Keyframe interval ayarları
-- **Durum**: Kısmen mevcut - Sadece temel ayarlar
-
-### 5. Audio Configuration
-- Audio device seçimi
-- Audio mixing
-- **Durum**: Kısmen mevcut - Sadece temel ayarlar
-
-### 6. Filters ve Effects
+### 4. Filters ve Effects
 - Video filtreleri
 - Audio efektleri
 - **Durum**: Eksik - Native SDK'da mevcut ancak pakette implement edilmemiş
 
-### 7. Screen Capture (Android)
+### 5. Screen Capture (Android)
 - Screen recording desteği
 - **Durum**: Eksik
-
-### 8. Multi-session Support
-- Birden fazla session'ın aynı anda yönetilmesi
-- **Durum**: Mevcut - Session ID bazlı yönetim var
-
-## 🔍 Test Edilmesi Gerekenler
-
-1. **Android**:
-   - [ ] Session oluşturma ve başlatma
-   - [ ] Kamera değiştirme
-   - [ ] Mikrofon kontrolü
-   - [ ] Network health monitoring
-   - [ ] Error handling
-
-2. **iOS**:
-   - [ ] Session oluşturma ve başlatma
-   - [ ] Kamera değiştirme
-   - [ ] Mikrofon kontrolü
-   - [ ] Network health monitoring
-   - [ ] Error handling
-
-3. **Genel**:
-   - [ ] Event listener'ların doğru çalışması
-   - [ ] Memory leak kontrolü
-   - [ ] Session cleanup
-   - [ ] Concurrent session yönetimi
 
 ## 📝 Notlar
 
 - Paket temel broadcast işlevselliğini sağlıyor
 - Preview view ve custom source gibi gelişmiş özellikler için ek implementasyon gerekli
 - Native SDK dokümantasyonuna göre eksik özellikler eklenebilir
-

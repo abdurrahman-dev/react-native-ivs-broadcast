@@ -6,6 +6,7 @@ React Native için Amazon Interactive Video Service (IVS) Broadcast SDK köprü 
 
 - ✅ Android 1.37.1 ve iOS 1.37.0 desteği
 - ✅ Broadcast başlatma/durdurma/duraklatma/devam ettirme
+- ✅ **Preview View** - Kamera önizleme component'i
 - ✅ Kamera kontrolü (ön/arka kamera değiştirme)
 - ✅ Mikrofon kontrolü (sessize alma/açma)
 - ✅ Video ve ses konfigürasyonu
@@ -86,53 +87,118 @@ cd ios && pod install && cd ..
 ### Temel Kullanım
 
 ```typescript
-import IVSBroadcast from '@abdurrahman-dev/react-native-ivs-broadcast';
+import IVSBroadcast, { PreviewView } from '@abdurrahman-dev/react-native-ivs-broadcast';
+import { useState, useEffect } from 'react';
+import { View, Button, StyleSheet } from 'react-native';
 
-// Session oluştur
-const session = await IVSBroadcast.createSession({
-  rtmpUrl: 'rtmp://your-stream-url.com',
-  streamKey: 'your-stream-key',
-  videoConfig: {
-    width: 1280,
-    height: 720,
-    bitrate: 2500000,
-    fps: 30,
-  },
-  audioConfig: {
-    bitrate: 128000,
-    sampleRate: 44100,
-    channels: 2,
-  },
+function BroadcastScreen() {
+  const [sessionId, setSessionId] = useState<string>();
+  const [isBroadcasting, setIsBroadcasting] = useState(false);
+
+  useEffect(() => {
+    // Session oluştur
+    const initSession = async () => {
+      const session = await IVSBroadcast.createSession({
+        rtmpUrl: 'rtmp://your-stream-url.com',
+        streamKey: 'your-stream-key',
+        videoConfig: {
+          width: 1280,
+          height: 720,
+          bitrate: 2500000,
+          fps: 30,
+        },
+        audioConfig: {
+          bitrate: 128000,
+          sampleRate: 44100,
+          channels: 2,
+        },
+      });
+      setSessionId(session.sessionId);
+    };
+
+    initSession();
+
+    // Event listener'ları ekle
+    const stateCleanup = IVSBroadcast.addListener('onStateChanged', (state) => {
+      console.log('Broadcast state:', state);
+      setIsBroadcasting(state.isBroadcasting);
+    });
+
+    const errorCleanup = IVSBroadcast.addListener('onError', (error) => {
+      console.error('Broadcast error:', error);
+    });
+
+    // Cleanup
+    return () => {
+      stateCleanup();
+      errorCleanup();
+      if (sessionId) {
+        IVSBroadcast.destroySession(sessionId);
+      }
+    };
+  }, []);
+
+  const handleStartStop = async () => {
+    if (!sessionId) return;
+    
+    if (isBroadcasting) {
+      await IVSBroadcast.stopBroadcast(sessionId);
+    } else {
+      await IVSBroadcast.startBroadcast(sessionId);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      {/* Kamera Preview */}
+      <PreviewView
+        sessionId={sessionId}
+        aspectMode="fill"
+        isMirrored={true}
+        style={styles.preview}
+      />
+      
+      <View style={styles.controls}>
+        <Button
+          title={isBroadcasting ? 'Yayını Durdur' : 'Yayını Başlat'}
+          onPress={handleStartStop}
+        />
+        <Button
+          title="Kamera Değiştir"
+          onPress={() => sessionId && IVSBroadcast.switchCamera(sessionId)}
+        />
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  preview: { flex: 1 },
+  controls: { padding: 20, gap: 10 },
 });
-
-// Event listener'ları ekle
-IVSBroadcast.addListener('onStateChanged', (state) => {
-  console.log('Broadcast state:', state);
-});
-
-IVSBroadcast.addListener('onError', (error) => {
-  console.error('Broadcast error:', error);
-});
-
-IVSBroadcast.addListener('onNetworkHealth', (health) => {
-  console.log('Network health:', health);
-});
-
-// Broadcast'i başlat
-await IVSBroadcast.startBroadcast(session.sessionId);
-
-// Kamera değiştir
-await IVSBroadcast.switchCamera(session.sessionId);
-
-// Mikrofonu sessize al
-await IVSBroadcast.setMuted(session.sessionId, true);
-
-// Broadcast'i durdur
-await IVSBroadcast.stopBroadcast(session.sessionId);
-
-// Session'ı yok et
-await IVSBroadcast.destroySession(session.sessionId);
 ```
+
+### PreviewView Component
+
+Yayıncının kamera görüntüsünü önizlemek için kullanılır.
+
+```typescript
+import { PreviewView } from '@abdurrahman-dev/react-native-ivs-broadcast';
+
+<PreviewView
+  sessionId={sessionId}      // Broadcast session ID (zorunlu)
+  aspectMode="fill"          // 'fit' veya 'fill' (varsayılan: 'fill')
+  isMirrored={true}          // Görüntüyü aynala (varsayılan: true)
+  style={{ flex: 1 }}        // View stili
+/>
+```
+
+**Props:**
+- `sessionId` (string, zorunlu): `createSession` ile oluşturulan session ID
+- `aspectMode` ('fit' | 'fill', opsiyonel): Görüntü sığdırma modu
+- `isMirrored` (boolean, opsiyonel): Ön kamera için aynalama (varsayılan: true)
+- `style` (ViewStyle, opsiyonel): Container view stili
 
 ### API Referansı
 

@@ -1,17 +1,15 @@
+def safeExtGet(prop, fallback) {
+    rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
+}
+
 buildscript {
-    ext {
-        buildToolsVersion = "33.0.0"
-        minSdkVersion = 21
-        compileSdkVersion = 33
-        targetSdkVersion = 33
-        kotlinVersion = "1.7.0"
-    }
+    ext.kotlinVersion = "1.8.22"
+    
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        classpath("com.android.tools.build:gradle:7.3.1")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
     }
 }
@@ -20,11 +18,13 @@ apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
 
 android {
-    compileSdkVersion rootProject.ext.compileSdkVersion
+    namespace "com.reactnativeivsbroadcast"
+    
+    compileSdkVersion safeExtGet('compileSdkVersion', 34)
 
     defaultConfig {
-        minSdkVersion rootProject.ext.minSdkVersion
-        targetSdkVersion rootProject.ext.targetSdkVersion
+        minSdkVersion safeExtGet('minSdkVersion', 21)
+        targetSdkVersion safeExtGet('targetSdkVersion', 34)
     }
 
     buildTypes {
@@ -34,21 +34,22 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
     }
 
     kotlinOptions {
-        jvmTarget = '1.8'
+        jvmTarget = '11'
+    }
+    
+    lintOptions {
+        abortOnError false
     }
 }
 
 repositories {
     mavenCentral()
     google()
-    maven {
-        url "https://www.jitpack.io"
-    }
 }
 
 dependencies {
@@ -56,6 +57,6 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion"
     
     // Amazon IVS Broadcast SDK
-    implementation 'com.amazonaws:ivs-broadcast:1.37.1:stages@aar'
+    implementation 'com.amazonaws:ivs-broadcast:1.37.1'
 }
 

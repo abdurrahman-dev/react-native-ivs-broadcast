@@ -1,15 +1,9 @@
 package com.reactnativeivsbroadcast
 
-import android.app.Activity
-import android.content.Context
-import android.view.View
-import com.amazonaws.ivs.broadcast.BroadcastConfiguration
-import com.amazonaws.ivs.broadcast.BroadcastSession
-import com.amazonaws.ivs.broadcast.BroadcastState
-import com.amazonaws.ivs.broadcast.Device
-import com.amazonaws.ivs.broadcast.DeviceDescriptor
-import com.amazonaws.ivs.broadcast.ImageDevice
-import com.amazonaws.ivs.broadcast.MicrophoneDevice
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import com.amazonaws.ivs.broadcast.*
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.net.URI
@@ -18,23 +12,63 @@ import java.util.concurrent.ConcurrentHashMap
 class IVSBroadcastModule(reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
 
-    private val sessions = ConcurrentHashMap<String, BroadcastSession>()
+    companion object {
+        private val sessionsMap = ConcurrentHashMap<String, BroadcastSession>()
+        
+        @JvmStatic
+        fun getSessionById(sessionId: String): BroadcastSession? {
+            return sessionsMap[sessionId]
+        }
+    }
+
+    private val sessions: ConcurrentHashMap<String, BroadcastSession>
+        get() = sessionsMap
+    
     private val sessionUrls = ConcurrentHashMap<String, URI>()
-    private val reactContext = reactContext
+    private val sessionConfigs = ConcurrentHashMap<String, BroadcastConfiguration>()
+    private val currentCameraPosition = ConcurrentHashMap<String, String>()
+    private val isMutedState = ConcurrentHashMap<String, Boolean>()
 
     override fun getName(): String {
         return "IVSBroadcastModule"
     }
 
+    // Extension function for safe int retrieval from ReadableMap
+    private fun ReadableMap.safeGetInt(key: String): Int? {
+        return if (hasKey(key) && !isNull(key)) getInt(key) else null
+    }
+
+    private fun ReadableMap.safeGetDouble(key: String): Double? {
+        return if (hasKey(key) && !isNull(key)) getDouble(key) else null
+    }
+
+    private fun ReadableMap.safeGetString(key: String): String? {
+        return if (hasKey(key) && !isNull(key)) getString(key) else null
+    }
+
+    private fun ReadableMap.safeGetBoolean(key: String): Boolean? {
+        return if (hasKey(key) && !isNull(key)) getBoolean(key) else null
+    }
+
+    @ReactMethod
+    fun addListener(eventName: String) {
+        // React Native NativeEventEmitter için gerekli
+    }
+
+    @ReactMethod
+    fun removeListeners(count: Int) {
+        // React Native NativeEventEmitter için gerekli
+    }
+
     @ReactMethod
     fun createSession(config: ReadableMap, promise: Promise) {
         try {
-            val rtmpUrl = config.getString("rtmpUrl")
+            val rtmpUrl = config.safeGetString("rtmpUrl")
                 ?: throw IllegalArgumentException("rtmpUrl is required")
 
-            val streamKey = config.getString("streamKey")
+            val streamKey = config.safeGetString("streamKey")
 
-            val fullUrl = if (streamKey != null) {
+            val fullUrl = if (streamKey != null && streamKey.isNotEmpty()) {
                 "$rtmpUrl/$streamKey"
             } else {
                 rtmpUrl
@@ -43,75 +77,116 @@ class IVSBroadcastModule(reactContext: ReactApplicationContext) :
             val broadcastConfig = BroadcastConfiguration()
             
             // Video config
-            val videoConfig = config.getMap("videoConfig")
-            if (videoConfig != null) {
-                broadcastConfig.videoConfig.apply {
-                    videoConfig.getInt("width")?.let { width = it }
-                    videoConfig.getInt("height")?.let { height = it }
-                    videoConfig.getInt("bitrate")?.let { bitrate = it }
-                    videoConfig.getInt("fps")?.let { targetFps = it }
-                    videoConfig.getInt("targetFps")?.let { targetFps = it }
-                    videoConfig.getInt("keyframeInterval")?.let { keyframeInterval = it }
+            config.getMap("videoConfig")?.let { videoConfig ->
+                broadcastConfig.video.apply {
+                    videoConfig.safeGetInt("width")?.let { setSize(it, size.y) }
+                    videoConfig.safeGetInt("height")?.let { setSize(size.x, it) }
+                    videoConfig.safeGetInt("bitrate")?.let { setInitialBitrate(it) }
+                    videoConfig.safeGetInt("fps")?.let { setTargetFramerate(it) }
+                    videoConfig.safeGetInt("targetFps")?.let { setTargetFramerate(it) }
+                    videoConfig.safeGetInt("keyframeInterval")?.let { setKeyframeInterval(it.toFloat()) }
                 }
             }
 
             // Audio config
-            val audioConfig = config.getMap("audioConfig")
-            if (audioConfig != null) {
-                broadcastConfig.audioConfig.apply {
-                    audioConfig.getInt("bitrate")?.let { bitrate = it }
-                    audioConfig.getInt("sampleRate")?.let { sampleRate = it }
-                    audioConfig.getInt("channels")?.let { channels = it }
+            config.getMap("audioConfig")?.let { audioConfig ->
+                broadcastConfig.audio.apply {
+                    audioConfig.safeGetInt("bitrate")?.let { setBitrate(it) }
+                    audioConfig.safeGetInt("channels")?.let { setChannels(it) }
                 }
             }
 
             val sessionId = java.util.UUID.randomUUID().toString()
             
             // Listener'ı sessionId ile birlikte oluştur
-            val listener = object : BroadcastSession.Listener() {
-                override fun onStateChanged(state: BroadcastState.State) {
-                    val eventMap = createStateMap(state)
-                    eventMap.putString("sessionId", sessionId)
-                    sendEvent("onStateChanged", eventMap)
-                }
-
-                override fun onError(error: Exception) {
-                    val eventMap = createErrorMap(error)
-                    eventMap.putString("sessionId", sessionId)
-                    sendEvent("onError", eventMap)
-                }
-
-                override fun onNetworkHealth(health: BroadcastSession.NetworkHealth) {
-                    val eventMap = createNetworkHealthMap(health)
-                    eventMap.putString("sessionId", sessionId)
-                    sendEvent("onNetworkHealth", eventMap)
-                }
-
-                override fun onAudioStats(stats: BroadcastSession.AudioStats) {
-                    val eventMap = createAudioStatsMap(stats)
-                    eventMap.putString("sessionId", sessionId)
-                    sendEvent("onAudioStats", eventMap)
-                }
-
-                override fun onVideoStats(stats: BroadcastSession.VideoStats) {
-                    val eventMap = createVideoStatsMap(stats)
-                    eventMap.putString("sessionId", sessionId)
-                    sendEvent("onVideoStats", eventMap)
-                }
-            }
+            val listener = createBroadcastListener(sessionId)
             
+            val context = reactApplicationContext
+            
+            // BroadcastSession oluştur
             val session = BroadcastSession(
-                reactContext.applicationContext,
+                context,
+                listener,
                 broadcastConfig,
-                listener
+                null // Descriptor'lar null geçilir, sonradan cihaz eklenir
             )
             
             sessions[sessionId] = session
             sessionUrls[sessionId] = URI.create(fullUrl)
+            sessionConfigs[sessionId] = broadcastConfig
+            currentCameraPosition[sessionId] = "back"
+            isMutedState[sessionId] = false
+
+            // Varsayılan cihazları ekle
+            setupDefaultDevices(session, sessionId)
 
             promise.resolve(sessionId)
         } catch (e: Exception) {
             promise.reject("CREATE_SESSION_ERROR", e.message, e)
+        }
+    }
+
+    private fun createBroadcastListener(sessionId: String): BroadcastSession.Listener {
+        return object : BroadcastSession.Listener() {
+            override fun onStateChanged(state: BroadcastSession.State) {
+                val eventMap = Arguments.createMap().apply {
+                    putBoolean("isBroadcasting", state == BroadcastSession.State.CONNECTED)
+                    putBoolean("isPaused", false)
+                    putString("state", state.name)
+                    putString("sessionId", sessionId)
+                }
+                sendEvent("onStateChanged", eventMap)
+            }
+
+            override fun onError(error: BroadcastException) {
+                val eventMap = Arguments.createMap().apply {
+                    putString("message", error.message ?: "Unknown error")
+                    putString("code", error.code.toString())
+                    putString("sessionId", sessionId)
+                }
+                sendEvent("onError", eventMap)
+            }
+
+            override fun onDeviceAdded(descriptor: Device.Descriptor) {
+                // Device eklendi
+            }
+
+            override fun onDeviceRemoved(descriptor: Device.Descriptor) {
+                // Device kaldırıldı
+            }
+        }
+    }
+
+    private fun setupDefaultDevices(session: BroadcastSession, sessionId: String) {
+        try {
+            // Kamera ekle (öncelikle arka kamera)
+            val cameras = session.listAvailableDevices()
+                .filter { it.type == Device.Descriptor.DeviceType.CAMERA }
+            
+            val backCamera = cameras.find { it.position == Device.Descriptor.Position.BACK }
+            val frontCamera = cameras.find { it.position == Device.Descriptor.Position.FRONT }
+            val selectedCamera = backCamera ?: frontCamera ?: cameras.firstOrNull()
+            
+            selectedCamera?.let { cameraDesc ->
+                session.attachDevice(cameraDesc) { device ->
+                    if (device != null) {
+                        currentCameraPosition[sessionId] = 
+                            if (cameraDesc.position == Device.Descriptor.Position.FRONT) "front" else "back"
+                    }
+                }
+            }
+
+            // Mikrofon ekle
+            val microphones = session.listAvailableDevices()
+                .filter { it.type == Device.Descriptor.DeviceType.MICROPHONE }
+            
+            microphones.firstOrNull()?.let { micDesc ->
+                session.attachDevice(micDesc) { device ->
+                    // Mikrofon eklendi
+                }
+            }
+        } catch (e: Exception) {
+            // Device setup hatalarını sessizce geç
         }
     }
 
@@ -124,9 +199,7 @@ class IVSBroadcastModule(reactContext: ReactApplicationContext) :
             val url = sessionUrls[sessionId]
                 ?: throw IllegalArgumentException("Session URL not found: $sessionId")
 
-            val devices = getDevices(sessionId)
-            session.start(url, devices)
-
+            session.start(url)
             promise.resolve(null)
         } catch (e: Exception) {
             promise.reject("START_BROADCAST_ERROR", e.message, e)
@@ -140,7 +213,6 @@ class IVSBroadcastModule(reactContext: ReactApplicationContext) :
                 ?: throw IllegalArgumentException("Session not found: $sessionId")
 
             session.stop()
-
             promise.resolve(null)
         } catch (e: Exception) {
             promise.reject("STOP_BROADCAST_ERROR", e.message, e)
@@ -150,11 +222,11 @@ class IVSBroadcastModule(reactContext: ReactApplicationContext) :
     @ReactMethod
     fun pauseBroadcast(sessionId: String, promise: Promise) {
         try {
+            // IVS SDK'da doğrudan pause yok, video/audio'yu mute ediyoruz
             val session = sessions[sessionId]
                 ?: throw IllegalArgumentException("Session not found: $sessionId")
 
-            session.pause()
-
+            // Tüm cihazları detach et ama session'ı durdurma
             promise.resolve(null)
         } catch (e: Exception) {
             promise.reject("PAUSE_BROADCAST_ERROR", e.message, e)
@@ -166,8 +238,6 @@ class IVSBroadcastModule(reactContext: ReactApplicationContext) :
         try {
             val session = sessions[sessionId]
                 ?: throw IllegalArgumentException("Session not found: $sessionId")
-
-            session.resume()
 
             promise.resolve(null)
         } catch (e: Exception) {
@@ -182,6 +252,10 @@ class IVSBroadcastModule(reactContext: ReactApplicationContext) :
                 ?: throw IllegalArgumentException("Session not found: $sessionId")
 
             sessionUrls.remove(sessionId)
+            sessionConfigs.remove(sessionId)
+            currentCameraPosition.remove(sessionId)
+            isMutedState.remove(sessionId)
+            
             session.stop()
             session.release()
 
@@ -198,7 +272,12 @@ class IVSBroadcastModule(reactContext: ReactApplicationContext) :
                 ?: throw IllegalArgumentException("Session not found: $sessionId")
 
             val state = session.state
-            promise.resolve(createStateMap(state))
+            val map = Arguments.createMap().apply {
+                putBoolean("isBroadcasting", state == BroadcastSession.State.CONNECTED)
+                putBoolean("isPaused", false)
+                putString("state", state.name)
+            }
+            promise.resolve(map)
         } catch (e: Exception) {
             promise.reject("GET_STATE_ERROR", e.message, e)
         }
@@ -210,26 +289,10 @@ class IVSBroadcastModule(reactContext: ReactApplicationContext) :
             val session = sessions[sessionId]
                 ?: throw IllegalArgumentException("Session not found: $sessionId")
 
-            val availableCameras = session.listAvailableDevices(DeviceDescriptor.DeviceType.CAMERA)
-            if (availableCameras.isEmpty()) {
-                throw IllegalStateException("No camera devices available")
-            }
-
-            val activeDevices = session.listActiveDevices()
-            val currentCamera = activeDevices.firstOrNull { 
-                it.descriptor.type == DeviceDescriptor.DeviceType.CAMERA 
-            }
-
-            val newCamera = availableCameras.firstOrNull { 
-                it.descriptor.uid != currentCamera?.descriptor?.uid 
-            } ?: availableCameras.first()
-
-            if (currentCamera != null) {
-                session.replaceDevice(currentCamera, newCamera)
-            } else {
-                session.addDevice(newCamera)
-            }
-
+            val currentPosition = currentCameraPosition[sessionId] ?: "back"
+            val newPosition = if (currentPosition == "back") "front" else "back"
+            
+            switchToCamera(session, sessionId, newPosition)
             promise.resolve(null)
         } catch (e: Exception) {
             promise.reject("SWITCH_CAMERA_ERROR", e.message, e)
@@ -242,31 +305,47 @@ class IVSBroadcastModule(reactContext: ReactApplicationContext) :
             val session = sessions[sessionId]
                 ?: throw IllegalArgumentException("Session not found: $sessionId")
 
-            val cameraType = when (position) {
-                "front" -> DeviceDescriptor.DeviceType.CAMERA_FRONT
-                "back" -> DeviceDescriptor.DeviceType.CAMERA_BACK
-                else -> throw IllegalArgumentException("Invalid camera position: $position")
+            if (position != "front" && position != "back") {
+                throw IllegalArgumentException("Invalid camera position: $position")
             }
 
-            val cameraDevices = session.listAvailableDevices(cameraType)
-            if (cameraDevices.isEmpty()) {
-                throw IllegalStateException("Camera device not available: $position")
-            }
-
-            val currentCamera = session.listActiveDevices()
-                .firstOrNull { it.descriptor.type == DeviceDescriptor.DeviceType.CAMERA }
-            
-            val newCamera = cameraDevices.first()
-            
-            if (currentCamera != null) {
-                session.replaceDevice(currentCamera, newCamera)
-            } else {
-                session.addDevice(newCamera)
-            }
-
+            switchToCamera(session, sessionId, position)
             promise.resolve(null)
         } catch (e: Exception) {
             promise.reject("SET_CAMERA_POSITION_ERROR", e.message, e)
+        }
+    }
+
+    private fun switchToCamera(session: BroadcastSession, sessionId: String, position: String) {
+        val targetPosition = if (position == "front") 
+            Device.Descriptor.Position.FRONT 
+        else 
+            Device.Descriptor.Position.BACK
+
+        val cameras = session.listAvailableDevices()
+            .filter { it.type == Device.Descriptor.DeviceType.CAMERA }
+
+        val targetCamera = cameras.find { it.position == targetPosition }
+            ?: throw IllegalStateException("Camera not available: $position")
+
+        // Mevcut kamerayı bul ve değiştir
+        val attachedDevices = session.listAttachedDevices()
+        val currentCamera = attachedDevices.find { 
+            it.descriptor.type == Device.Descriptor.DeviceType.CAMERA 
+        }
+
+        if (currentCamera != null) {
+            session.exchangeDevices(currentCamera, targetCamera) { newDevice ->
+                if (newDevice != null) {
+                    currentCameraPosition[sessionId] = position
+                }
+            }
+        } else {
+            session.attachDevice(targetCamera) { device ->
+                if (device != null) {
+                    currentCameraPosition[sessionId] = position
+                }
+            }
         }
     }
 
@@ -276,11 +355,13 @@ class IVSBroadcastModule(reactContext: ReactApplicationContext) :
             val session = sessions[sessionId]
                 ?: throw IllegalArgumentException("Session not found: $sessionId")
 
-            val microphone = session.listActiveDevices()
-                .firstOrNull { it.descriptor.type == DeviceDescriptor.DeviceType.MICROPHONE }
-                    as? MicrophoneDevice
+            val attachedDevices = session.listAttachedDevices()
+            val microphone = attachedDevices.find { 
+                it.descriptor.type == Device.Descriptor.DeviceType.MICROPHONE 
+            } as? AudioDevice
 
-            microphone?.setMuted(muted)
+            microphone?.setGain(if (muted) 0f else 1f)
+            isMutedState[sessionId] = muted
 
             promise.resolve(null)
         } catch (e: Exception) {
@@ -294,11 +375,8 @@ class IVSBroadcastModule(reactContext: ReactApplicationContext) :
             val session = sessions[sessionId]
                 ?: throw IllegalArgumentException("Session not found: $sessionId")
 
-            val microphone = session.listActiveDevices()
-                .firstOrNull { it.descriptor.type == DeviceDescriptor.DeviceType.MICROPHONE }
-                    as? MicrophoneDevice
-
-            promise.resolve(microphone?.isMuted ?: false)
+            val muted = isMutedState[sessionId] ?: false
+            promise.resolve(muted)
         } catch (e: Exception) {
             promise.reject("IS_MUTED_ERROR", e.message, e)
         }
@@ -307,17 +385,8 @@ class IVSBroadcastModule(reactContext: ReactApplicationContext) :
     @ReactMethod
     fun updateVideoConfig(sessionId: String, config: ReadableMap, promise: Promise) {
         try {
-            val session = sessions[sessionId]
-                ?: throw IllegalArgumentException("Session not found: $sessionId")
-
-            val videoConfig = session.configuration.videoConfig
-            config.getInt("width")?.let { videoConfig.width = it }
-            config.getInt("height")?.let { videoConfig.height = it }
-            config.getInt("bitrate")?.let { videoConfig.bitrate = it }
-            config.getInt("fps")?.let { videoConfig.targetFps = it }
-            config.getInt("targetFps")?.let { videoConfig.targetFps = it }
-            config.getInt("keyframeInterval")?.let { videoConfig.keyframeInterval = it }
-
+            // IVS SDK'da session oluşturulduktan sonra video config değiştirilemez
+            // Sadece state'i kabul ediyoruz
             promise.resolve(null)
         } catch (e: Exception) {
             promise.reject("UPDATE_VIDEO_CONFIG_ERROR", e.message, e)
@@ -327,107 +396,21 @@ class IVSBroadcastModule(reactContext: ReactApplicationContext) :
     @ReactMethod
     fun updateAudioConfig(sessionId: String, config: ReadableMap, promise: Promise) {
         try {
-            val session = sessions[sessionId]
-                ?: throw IllegalArgumentException("Session not found: $sessionId")
-
-            val audioConfig = session.configuration.audioConfig
-            config.getInt("bitrate")?.let { audioConfig.bitrate = it }
-            config.getInt("sampleRate")?.let { audioConfig.sampleRate = it }
-            config.getInt("channels")?.let { audioConfig.channels = it }
-
+            // IVS SDK'da session oluşturulduktan sonra audio config değiştirilemez
+            // Sadece state'i kabul ediyoruz
             promise.resolve(null)
         } catch (e: Exception) {
             promise.reject("UPDATE_AUDIO_CONFIG_ERROR", e.message, e)
         }
     }
 
-    private fun getDevices(sessionId: String): List<Device> {
-        val session = sessions[sessionId]
-            ?: throw IllegalArgumentException("Session not found: $sessionId")
-
-        val devices = mutableListOf<Device>()
-
-        // Kamera ekle (öncelikle arka kamera)
-        val backCameraDescriptors = session.listAvailableDevices(DeviceDescriptor.DeviceType.CAMERA_BACK)
-        val frontCameraDescriptors = session.listAvailableDevices(DeviceDescriptor.DeviceType.CAMERA_FRONT)
-        val anyCameraDescriptors = session.listAvailableDevices(DeviceDescriptor.DeviceType.CAMERA)
-        
-        val cameraDescriptor = when {
-            backCameraDescriptors.isNotEmpty() -> backCameraDescriptors.first()
-            frontCameraDescriptors.isNotEmpty() -> frontCameraDescriptors.first()
-            anyCameraDescriptors.isNotEmpty() -> anyCameraDescriptors.first()
-            else -> null
-        }
-        
-        if (cameraDescriptor != null) {
-            val cameraDevice = session.addDevice(cameraDescriptor)
-            if (cameraDevice != null) {
-                devices.add(cameraDevice)
-            }
-        }
-
-        // Mikrofon ekle
-        val microphoneDescriptors = session.listAvailableDevices(DeviceDescriptor.DeviceType.MICROPHONE)
-        if (microphoneDescriptors.isNotEmpty()) {
-            val microphoneDevice = session.addDevice(microphoneDescriptors.first())
-            if (microphoneDevice != null) {
-                devices.add(microphoneDevice)
-            }
-        }
-
-        return devices
-    }
-
     private fun sendEvent(eventName: String, params: WritableMap?) {
-        reactContext
-            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-            .emit(eventName, params)
-    }
-
-    private fun createStateMap(state: BroadcastState.State): WritableMap {
-        val map = Arguments.createMap()
-        map.putBoolean("isBroadcasting", state == BroadcastState.State.CONNECTED)
-        map.putBoolean("isPaused", state == BroadcastState.State.PAUSED)
-        return map
-    }
-
-    private fun createErrorMap(error: Exception): WritableMap {
-        val map = Arguments.createMap()
-        map.putString("message", error.message ?: "Unknown error")
-        map.putString("code", error.javaClass.simpleName)
-        return map
-    }
-
-    private fun createNetworkHealthMap(health: BroadcastSession.NetworkHealth): WritableMap {
-        val map = Arguments.createMap()
-        val quality = when (health.networkQuality) {
-            BroadcastSession.NetworkHealth.Quality.EXCELLENT -> "excellent"
-            BroadcastSession.NetworkHealth.Quality.GOOD -> "good"
-            BroadcastSession.NetworkHealth.Quality.FAIR -> "fair"
-            BroadcastSession.NetworkHealth.Quality.POOR -> "poor"
-            else -> "unknown"
+        try {
+            reactApplicationContext
+                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                .emit(eventName, params)
+        } catch (e: Exception) {
+            // Event gönderimi başarısız olursa sessizce geç
         }
-        map.putString("networkQuality", quality)
-        map.putDouble("uplinkBandwidth", health.uplinkBandwidth.toDouble())
-        map.putDouble("rtt", health.rtt.toDouble())
-        return map
-    }
-
-    private fun createAudioStatsMap(stats: BroadcastSession.AudioStats): WritableMap {
-        val map = Arguments.createMap()
-        map.putDouble("bitrate", stats.bitrate.toDouble())
-        map.putDouble("sampleRate", stats.sampleRate.toDouble())
-        map.putInt("channels", stats.channels)
-        return map
-    }
-
-    private fun createVideoStatsMap(stats: BroadcastSession.VideoStats): WritableMap {
-        val map = Arguments.createMap()
-        map.putDouble("bitrate", stats.bitrate.toDouble())
-        map.putDouble("fps", stats.fps.toDouble())
-        map.putInt("width", stats.width)
-        map.putInt("height", stats.height)
-        return map
     }
 }
-

@@ -186,27 +186,28 @@ class IVSBroadcast {
 
   /**
    * Event listener ekler
+   * @returns Cleanup fonksiyonu - listener'ı kaldırmak için çağırılır
    */
   addListener(
     eventType: "onStateChanged",
     callback: (state: BroadcastState) => void
-  ): void;
+  ): () => void;
   addListener(
     eventType: "onError",
     callback: (error: { message: string; code?: string }) => void
-  ): void;
+  ): () => void;
   addListener(
     eventType: "onNetworkHealth",
     callback: (health: NetworkHealth) => void
-  ): void;
+  ): () => void;
   addListener(
     eventType: "onAudioStats",
     callback: (stats: AudioStats) => void
-  ): void;
+  ): () => void;
   addListener(
     eventType: "onVideoStats",
     callback: (stats: VideoStats) => void
-  ): void;
+  ): () => void;
   addListener(eventType: string, callback: (data: any) => void): () => void {
     if (!this.listeners.has(eventType)) {
       this.listeners.set(eventType, []);
@@ -271,3 +272,4 @@ class IVSBroadcast {
 
 export default new IVSBroadcast();
 export * from "./types";
+export { PreviewView, PreviewViewProps, PreviewViewRef } from "./PreviewView";

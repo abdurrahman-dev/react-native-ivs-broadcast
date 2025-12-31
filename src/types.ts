@@ -12,7 +12,7 @@ export interface VideoConfig {
   fps?: number;
   targetFps?: number;
   keyframeInterval?: number;
-  encoder?: 'hardware' | 'software';
+  encoder?: "hardware" | "software";
 }
 
 export interface AudioConfig {
@@ -32,19 +32,53 @@ export interface BroadcastState {
 }
 
 export interface CameraPosition {
-  position: 'front' | 'back';
+  position: "front" | "back";
 }
 
 export interface PreviewViewProps {
+  /**
+   * Broadcast session ID
+   */
+  sessionId?: string;
+
+  /**
+   * Görüntünün ekrana nasıl sığdırılacağı
+   * - 'fit': Tüm görüntüyü göster, boşluk bırakabilir
+   * - 'fill': Ekranı tamamen doldur, görüntü kırpılabilir
+   * @default 'fill'
+   */
+  aspectMode?: "fit" | "fill";
+
+  /**
+   * Görüntüyü yatay olarak aynala (ön kamera için önerilir)
+   * @default true
+   */
+  isMirrored?: boolean;
+
+  /**
+   * View stili
+   */
   style?: any;
+
+  /**
+   * Test ID
+   */
+  testID?: string;
+}
+
+export interface PreviewViewRef {
+  /**
+   * Preview'ı yeniden yükle
+   */
+  refresh: () => void;
 }
 
 export type BroadcastEventType =
-  | 'onStateChanged'
-  | 'onError'
-  | 'onNetworkHealth'
-  | 'onAudioStats'
-  | 'onVideoStats';
+  | "onStateChanged"
+  | "onError"
+  | "onNetworkHealth"
+  | "onAudioStats"
+  | "onVideoStats";
 
 export interface BroadcastEvent {
   type: BroadcastEventType;
@@ -52,7 +86,7 @@ export interface BroadcastEvent {
 }
 
 export interface NetworkHealth {
-  networkQuality: 'excellent' | 'good' | 'fair' | 'poor';
+  networkQuality: "excellent" | "good" | "fair" | "poor";
   uplinkBandwidth?: number;
   rtt?: number;
 }
@@ -69,4 +103,3 @@ export interface VideoStats {
   width: number;
   height: number;
 }
-
