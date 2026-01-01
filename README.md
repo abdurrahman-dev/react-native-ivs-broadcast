@@ -4,12 +4,24 @@ React Native için Amazon IVS Broadcast SDK köprü paketi. Canlı yayın başla
 
 ## Özellikler
 
+### Temel Özellikler
 - ✅ Broadcast başlatma/durdurma
 - ✅ Kamera önizleme component'i
 - ✅ Kamera kontrolü (ön/arka değiştirme)
 - ✅ Mikrofon kontrolü
 - ✅ Video ve ses konfigürasyonu
 - ✅ Event-based API
+
+### Gelişmiş Özellikler
+- ✅ Kamera zoom kontrolü
+- ✅ Flaş (torch) kontrolü
+- ✅ Ses gain ayarı (0.0 - 2.0)
+- ✅ Cihaz listeleme (kullanılabilir ve bağlı cihazlar)
+- ✅ Kamera yetenekleri sorgulama
+- ✅ Zamanlı metadata gönderme
+- ✅ Gelişmiş istatistikler (transmission stats)
+- ✅ Ses cihazı istatistikleri (peak, RMS)
+- ✅ Picture-in-Picture (PiP) desteği (iOS 15+, Android 8.0+)
 
 ## Kurulum
 
@@ -223,12 +235,19 @@ await IVSBroadcast.destroySession(sessionId);
 ### Kamera Kontrolü
 
 ```typescript
-// Kamera değiştir
+// Kamera değiştir (front/back arasında)
 await IVSBroadcast.switchCamera(sessionId);
 
 // Kamera pozisyonu ayarla
 await IVSBroadcast.setCameraPosition(sessionId, 'front');
 await IVSBroadcast.setCameraPosition(sessionId, 'back');
+
+// Kamera listesinden belirli bir kamerayı seç
+const devices = await IVSBroadcast.listAvailableDevices();
+const cameras = devices.filter(d => d.type === 'camera');
+
+// İstediğiniz kamerayı seçin
+await IVSBroadcast.selectCamera(sessionId, cameras[0].deviceId);
 ```
 
 ### Mikrofon Kontrolü
@@ -240,6 +259,58 @@ await IVSBroadcast.setMuted(sessionId, false);
 
 // Mikrofon durumunu kontrol et
 const isMuted = await IVSBroadcast.isMuted(sessionId);
+
+// Ses gain ayarla (0.0 = sessiz, 1.0 = normal, 2.0 = amplify)
+await IVSBroadcast.setAudioGain(sessionId, 1.5);
+
+// Mevcut gain seviyesini al
+const gain = await IVSBroadcast.getAudioGain(sessionId);
+
+// Mikrofon listesinden belirli bir mikrofonu seç
+const devices = await IVSBroadcast.listAvailableDevices();
+const microphones = devices.filter(d => d.type === 'microphone');
+
+// İstediğiniz mikrofonu seçin
+await IVSBroadcast.selectMicrophone(sessionId, microphones[0].deviceId);
+```
+
+### Gelişmiş Kamera Kontrolü
+
+```typescript
+// Zoom seviyesi ayarla
+await IVSBroadcast.setCameraZoom(sessionId, 2.0);
+
+// Flaşı aç/kapat
+await IVSBroadcast.setTorchEnabled(sessionId, true);
+
+// Kamera yeteneklerini al
+const capabilities = await IVSBroadcast.getCameraCapabilities(sessionId);
+console.log('Min zoom:', capabilities.minZoomFactor);
+console.log('Max zoom:', capabilities.maxZoomFactor);
+console.log('Torch supported:', capabilities.isTorchSupported);
+```
+
+### Cihaz Yönetimi
+
+```typescript
+// Kullanılabilir cihazları listele
+const availableDevices = await IVSBroadcast.listAvailableDevices();
+availableDevices.forEach(device => {
+  console.log(`${device.type}: ${device.friendlyName}`);
+});
+
+// Bağlı cihazları listele
+const attachedDevices = await IVSBroadcast.listAttachedDevices(sessionId);
+```
+
+### Zamanlı Metadata
+
+```typescript
+// Yayına senkronize metadata gönder
+await IVSBroadcast.sendTimedMetadata(sessionId, JSON.stringify({
+  timestamp: Date.now(),
+  customData: 'your data'
+}));
 ```
 
 ### Event Listener'lar
@@ -260,7 +331,7 @@ IVSBroadcast.addListener('onNetworkHealth', (health) => {
   console.log('Quality:', health.networkQuality);
 });
 
-// İstatistikler (iOS)
+// İstatistikler
 IVSBroadcast.addListener('onAudioStats', (stats) => {
   console.log('Audio bitrate:', stats.bitrate);
 });
@@ -268,13 +339,50 @@ IVSBroadcast.addListener('onAudioStats', (stats) => {
 IVSBroadcast.addListener('onVideoStats', (stats) => {
   console.log('Video bitrate:', stats.bitrate, 'FPS:', stats.fps);
 });
+
+// Gelişmiş istatistikler (transmission stats)
+IVSBroadcast.addListener('onTransmissionStatistics', (stats) => {
+  console.log('Measured bitrate:', stats.measuredBitrate);
+  console.log('Recommended bitrate:', stats.recommendedBitrate);
+  console.log('RTT:', stats.rtt);
+  console.log('Broadcast quality:', stats.broadcastQuality);
+  console.log('Network health:', stats.networkHealth);
+});
+
+// Ses cihazı istatistikleri
+IVSBroadcast.addListener('onAudioDeviceStats', (stats) => {
+  console.log('Peak:', stats.peak, 'RMS:', stats.rms);
+});
 ```
+
+### Picture-in-Picture (PiP)
+
+```typescript
+// PiP desteğini kontrol et
+const isSupported = await IVSBroadcast.isPictureInPictureSupported();
+if (isSupported) {
+  // PiP modunu başlat
+  await IVSBroadcast.startPictureInPicture(sessionId);
+  
+  // PiP durumunu kontrol et
+  const state = await IVSBroadcast.getPictureInPictureState(sessionId);
+  console.log('PiP state:', state); // 'idle', 'active', 'stopped'
+  
+  // PiP modunu durdur
+  await IVSBroadcast.stopPictureInPicture(sessionId);
+}
+```
+
+**Notlar:**
+- **iOS**: PiP desteği iOS 15.0+ gerektirir
+- **Android**: PiP desteği Android 8.0 (API 26)+ gerektirir
+- Android'de PiP için `AndroidManifest.xml` dosyanıza `android:supportsPictureInPicture="true"` eklemeniz gerekebilir
 
 ## Gereksinimler
 
 - React Native >= 0.60.0
-- Android: minSdkVersion 21
-- iOS: 11.0+
+- Android: minSdkVersion 21 (PiP için API 26+)
+- iOS: 11.0+ (PiP için iOS 15.0+)
 
 ## Lisans
 

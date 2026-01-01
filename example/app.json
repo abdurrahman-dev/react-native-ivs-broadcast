@@ -8,7 +8,8 @@
       "package": "com.canlimezat.example"
     },
     "ios": {
-      "bundleIdentifier": "com.canlimezat.example"
+      "bundleIdentifier": "com.canlimezat.example",
+      "appleTeamId": "66M44JXMFP"
     }
   }
 }

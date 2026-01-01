@@ -9,7 +9,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "@abdurrahman-dev/react-native-ivs-broadcast": "^0.2.5",
+    "@abdurrahman-dev/react-native-ivs-broadcast": "0.2.7",
     "amazon-ivs-react-native-player": "^1.5.0",
     "expo": "~54.0.30",
     "expo-camera": "~17.0.10",

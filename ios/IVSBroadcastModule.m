@@ -1,13 +1,15 @@
 #import "IVSBroadcastModule.h"
 #import <AmazonIVSBroadcast/AmazonIVSBroadcast.h>
+#import <AVKit/AVKit.h>
 
 static IVSBroadcastModule *sharedInstance = nil;
 
-@interface IVSBroadcastModule () <IVSBroadcastSessionDelegate>
+@interface IVSBroadcastModule () <IVSBroadcastSessionDelegate, AVPictureInPictureControllerDelegate>
 @property (nonatomic, strong) NSMutableDictionary<NSString *, IVSBroadcastSession *> *sessions;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSURL *> *sessionUrls;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *currentCameraPosition;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *isMutedState;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, AVPictureInPictureController *> *pipControllers;
 @property (nonatomic, assign) BOOL hasListeners;
 @end
 
@@ -26,6 +28,7 @@ RCT_EXPORT_MODULE(IVSBroadcastModule);
         _sessionUrls = [NSMutableDictionary dictionary];
         _currentCameraPosition = [NSMutableDictionary dictionary];
         _isMutedState = [NSMutableDictionary dictionary];
+        _pipControllers = [NSMutableDictionary dictionary];
         _hasListeners = NO;
         sharedInstance = self;
     }
@@ -381,6 +384,150 @@ RCT_EXPORT_METHOD(setCameraPosition:(NSString *)sessionId
     });
 }
 
+RCT_EXPORT_METHOD(selectCamera:(NSString *)sessionId
+                  deviceId:(NSString *)deviceId
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @try {
+            IVSBroadcastSession *session = self.sessions[sessionId];
+            if (!session) {
+                reject(@"SELECT_CAMERA_ERROR", @"Session not found", nil);
+                return;
+            }
+            
+            // Tüm kullanılabilir cihazları listele
+            NSArray<IVSDeviceDescriptor *> *availableDevices = [IVSBroadcastSession listAvailableDevices];
+            IVSDeviceDescriptor *targetCamera = nil;
+            
+            // deviceId ile kamerayı bul
+            for (IVSDeviceDescriptor *device in availableDevices) {
+                if (device.type == IVSDeviceTypeCamera && 
+                    [device.urn isEqualToString:deviceId]) {
+                    targetCamera = device;
+                    break;
+                }
+            }
+            
+            if (!targetCamera) {
+                reject(@"SELECT_CAMERA_ERROR", 
+                       [NSString stringWithFormat:@"Camera with deviceId '%@' not found", deviceId], nil);
+                return;
+            }
+            
+            // Mevcut kamerayı bul
+            NSArray<id<IVSDevice>> *attachedDevices = [session listAttachedDevices];
+            id<IVSDevice> currentCamera = nil;
+            
+            for (id<IVSDevice> device in attachedDevices) {
+                if (device.descriptor.type == IVSDeviceTypeCamera) {
+                    currentCamera = device;
+                    break;
+                }
+            }
+            
+            // Kamera pozisyonunu güncelle
+            NSString *position = (targetCamera.position == IVSDevicePositionFront) ? @"front" : @"back";
+            
+            if (currentCamera) {
+                // Mevcut kamerayı yeni kamerayla değiştir
+                [session exchangeOldDevice:currentCamera withNewDevice:targetCamera onComplete:^(id<IVSDevice> _Nullable newDevice, NSError * _Nullable error) {
+                    if (newDevice) {
+                        self.currentCameraPosition[sessionId] = position;
+                        
+                        // Kamera değişti, PreviewView'ları bilgilendir
+                        [[NSNotificationCenter defaultCenter] postNotificationName:@"IVSCameraDeviceChanged" 
+                                                                        object:nil 
+                                                                      userInfo:@{@"sessionId": sessionId}];
+                        resolve(nil);
+                    } else {
+                        reject(@"SELECT_CAMERA_ERROR", error.localizedDescription ?: @"Failed to select camera", error);
+                    }
+                }];
+            } else {
+                // Kamera yoksa yeni kamerayı ekle
+                [session attachDeviceDescriptor:targetCamera toSlotWithName:nil onComplete:^(id<IVSDevice> _Nullable device, NSError * _Nullable error) {
+                    if (device) {
+                        self.currentCameraPosition[sessionId] = position;
+                        resolve(nil);
+                    } else {
+                        reject(@"SELECT_CAMERA_ERROR", error.localizedDescription ?: @"Failed to attach camera", error);
+                    }
+                }];
+            }
+        } @catch (NSException *exception) {
+            reject(@"SELECT_CAMERA_ERROR", exception.reason, nil);
+        }
+    });
+}
+
+RCT_EXPORT_METHOD(selectMicrophone:(NSString *)sessionId
+                  deviceId:(NSString *)deviceId
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @try {
+            IVSBroadcastSession *session = self.sessions[sessionId];
+            if (!session) {
+                reject(@"SELECT_MICROPHONE_ERROR", @"Session not found", nil);
+                return;
+            }
+            
+            // Tüm kullanılabilir cihazları listele
+            NSArray<IVSDeviceDescriptor *> *availableDevices = [IVSBroadcastSession listAvailableDevices];
+            IVSDeviceDescriptor *targetMicrophone = nil;
+            
+            // deviceId ile mikrofonu bul
+            for (IVSDeviceDescriptor *device in availableDevices) {
+                if (device.type == IVSDeviceTypeMicrophone && 
+                    [device.urn isEqualToString:deviceId]) {
+                    targetMicrophone = device;
+                    break;
+                }
+            }
+            
+            if (!targetMicrophone) {
+                reject(@"SELECT_MICROPHONE_ERROR", 
+                       [NSString stringWithFormat:@"Microphone with deviceId '%@' not found", deviceId], nil);
+                return;
+            }
+            
+            // Mevcut mikrofonu bul
+            NSArray<id<IVSDevice>> *attachedDevices = [session listAttachedDevices];
+            id<IVSDevice> currentMicrophone = nil;
+            
+            for (id<IVSDevice> device in attachedDevices) {
+                if (device.descriptor.type == IVSDeviceTypeMicrophone) {
+                    currentMicrophone = device;
+                    break;
+                }
+            }
+            
+            if (currentMicrophone) {
+                // Mevcut mikrofonu yeni mikrofonla değiştir
+                [session exchangeOldDevice:currentMicrophone withNewDevice:targetMicrophone onComplete:^(id<IVSDevice> _Nullable newDevice, NSError * _Nullable error) {
+                    if (newDevice) {
+                        resolve(nil);
+                    } else {
+                        reject(@"SELECT_MICROPHONE_ERROR", error.localizedDescription ?: @"Failed to select microphone", error);
+                    }
+                }];
+            } else {
+                // Mikrofon yoksa yeni mikrofonu ekle
+                [session attachDeviceDescriptor:targetMicrophone toSlotWithName:nil onComplete:^(id<IVSDevice> _Nullable device, NSError * _Nullable error) {
+                    if (device) {
+                        resolve(nil);
+                    } else {
+                        reject(@"SELECT_MICROPHONE_ERROR", error.localizedDescription ?: @"Failed to attach microphone", error);
+                    }
+                }];
+            }
+        } @catch (NSException *exception) {
+            reject(@"SELECT_MICROPHONE_ERROR", exception.reason, nil);
+        }
+    });
+}
+
 - (void)switchToCamera:(NSString *)position 
                session:(IVSBroadcastSession *)session 
              sessionId:(NSString *)sessionId
@@ -653,6 +800,412 @@ RCT_EXPORT_METHOD(updateAudioConfig:(NSString *)sessionId
         }
     }
     return nil;
+}
+
+// MARK: - Gelişmiş Özellikler
+
+RCT_EXPORT_METHOD(listAvailableDevices:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @try {
+            NSArray<IVSDeviceDescriptor *> *devices = [IVSBroadcastSession listAvailableDevices];
+            NSMutableArray *deviceArray = [NSMutableArray array];
+            
+            for (IVSDeviceDescriptor *device in devices) {
+                NSDictionary *deviceDict = @{
+                    @"type": [self deviceTypeToString:device.type],
+                    @"position": [self devicePositionToString:device.position],
+                    @"deviceId": device.urn ?: @"",
+                    @"friendlyName": device.friendlyName ?: @"",
+                    @"isDefault": @(device.isDefault)
+                };
+                [deviceArray addObject:deviceDict];
+            }
+            
+            resolve(deviceArray);
+        } @catch (NSException *exception) {
+            reject(@"LIST_DEVICES_ERROR", exception.reason, nil);
+        }
+    });
+}
+
+RCT_EXPORT_METHOD(listAttachedDevices:(NSString *)sessionId
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @try {
+            IVSBroadcastSession *session = self.sessions[sessionId];
+            if (!session) {
+                reject(@"LIST_ATTACHED_DEVICES_ERROR", @"Session not found", nil);
+                return;
+            }
+            
+            NSArray<id<IVSDevice>> *devices = [session listAttachedDevices];
+            NSMutableArray *deviceArray = [NSMutableArray array];
+            
+            for (id<IVSDevice> device in devices) {
+                NSDictionary *deviceDict = @{
+                    @"type": [self deviceTypeToString:device.descriptor.type],
+                    @"position": [self devicePositionToString:device.descriptor.position],
+                    @"deviceId": device.descriptor.urn ?: @"",
+                    @"friendlyName": device.descriptor.friendlyName ?: @"",
+                    @"isDefault": @(device.descriptor.isDefault)
+                };
+                [deviceArray addObject:deviceDict];
+            }
+            
+            resolve(deviceArray);
+        } @catch (NSException *exception) {
+            reject(@"LIST_ATTACHED_DEVICES_ERROR", exception.reason, nil);
+        }
+    });
+}
+
+RCT_EXPORT_METHOD(setCameraZoom:(NSString *)sessionId
+                  zoomFactor:(double)zoomFactor
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @try {
+            IVSBroadcastSession *session = self.sessions[sessionId];
+            if (!session) {
+                reject(@"SET_ZOOM_ERROR", @"Session not found", nil);
+                return;
+            }
+            
+            NSArray<id<IVSDevice>> *attachedDevices = [session listAttachedDevices];
+            for (id<IVSDevice> device in attachedDevices) {
+                if (device.descriptor.type == IVSDeviceTypeCamera) {
+                    if ([device conformsToProtocol:@protocol(IVSCamera)]) {
+                        id<IVSCamera> camera = (id<IVSCamera>)device;
+                        [camera setVideoZoomFactor:zoomFactor];
+                        resolve(nil);
+                        return;
+                    }
+                }
+            }
+            
+            reject(@"SET_ZOOM_ERROR", @"Camera not found", nil);
+        } @catch (NSException *exception) {
+            reject(@"SET_ZOOM_ERROR", exception.reason, nil);
+        }
+    });
+}
+
+RCT_EXPORT_METHOD(setTorchEnabled:(NSString *)sessionId
+                  enabled:(BOOL)enabled
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @try {
+            IVSBroadcastSession *session = self.sessions[sessionId];
+            if (!session) {
+                reject(@"SET_TORCH_ERROR", @"Session not found", nil);
+                return;
+            }
+            
+            NSArray<id<IVSDevice>> *attachedDevices = [session listAttachedDevices];
+            for (id<IVSDevice> device in attachedDevices) {
+                if (device.descriptor.type == IVSDeviceTypeCamera) {
+                    if ([device conformsToProtocol:@protocol(IVSCamera)]) {
+                        id<IVSCamera> camera = (id<IVSCamera>)device;
+                        if (camera.isTorchSupported) {
+                            camera.torchEnabled = enabled;
+                            resolve(nil);
+                            return;
+                        } else {
+                            reject(@"SET_TORCH_ERROR", @"Torch not supported on this camera", nil);
+                            return;
+                        }
+                    }
+                }
+            }
+            
+            reject(@"SET_TORCH_ERROR", @"Camera not found", nil);
+        } @catch (NSException *exception) {
+            reject(@"SET_TORCH_ERROR", exception.reason, nil);
+        }
+    });
+}
+
+RCT_EXPORT_METHOD(getCameraCapabilities:(NSString *)sessionId
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @try {
+            IVSBroadcastSession *session = self.sessions[sessionId];
+            if (!session) {
+                reject(@"GET_CAPABILITIES_ERROR", @"Session not found", nil);
+                return;
+            }
+            
+            NSArray<id<IVSDevice>> *attachedDevices = [session listAttachedDevices];
+            for (id<IVSDevice> device in attachedDevices) {
+                if (device.descriptor.type == IVSDeviceTypeCamera) {
+                    if ([device conformsToProtocol:@protocol(IVSCamera)]) {
+                        id<IVSCamera> camera = (id<IVSCamera>)device;
+                        NSDictionary *capabilities = @{
+                            @"minZoomFactor": @(camera.minAvailableVideoZoomFactor),
+                            @"maxZoomFactor": @(camera.maxAvailableVideoZoomFactor),
+                            @"isTorchSupported": @(camera.isTorchSupported)
+                        };
+                        resolve(capabilities);
+                        return;
+                    }
+                }
+            }
+            
+            reject(@"GET_CAPABILITIES_ERROR", @"Camera not found", nil);
+        } @catch (NSException *exception) {
+            reject(@"GET_CAPABILITIES_ERROR", exception.reason, nil);
+        }
+    });
+}
+
+RCT_EXPORT_METHOD(sendTimedMetadata:(NSString *)sessionId
+                  metadata:(NSString *)metadata
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @try {
+            IVSBroadcastSession *session = self.sessions[sessionId];
+            if (!session) {
+                reject(@"SEND_METADATA_ERROR", @"Session not found", nil);
+                return;
+            }
+            
+            NSError *error = nil;
+            BOOL success = [session sendTimedMetadata:metadata error:&error];
+            
+            if (success) {
+                resolve(nil);
+            } else {
+                reject(@"SEND_METADATA_ERROR", error.localizedDescription ?: @"Failed to send metadata", error);
+            }
+        } @catch (NSException *exception) {
+            reject(@"SEND_METADATA_ERROR", exception.reason, nil);
+        }
+    });
+}
+
+RCT_EXPORT_METHOD(setAudioGain:(NSString *)sessionId
+                  gain:(double)gain
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @try {
+            IVSBroadcastSession *session = self.sessions[sessionId];
+            if (!session) {
+                reject(@"SET_GAIN_ERROR", @"Session not found", nil);
+                return;
+            }
+            
+            NSArray<id<IVSDevice>> *attachedDevices = [session listAttachedDevices];
+            for (id<IVSDevice> device in attachedDevices) {
+                if (device.descriptor.type == IVSDeviceTypeMicrophone) {
+                    if ([device conformsToProtocol:@protocol(IVSAudioDevice)]) {
+                        id<IVSAudioDevice> audioDevice = (id<IVSAudioDevice>)device;
+                        [audioDevice setGain:gain];
+                        resolve(nil);
+                        return;
+                    }
+                }
+            }
+            
+            reject(@"SET_GAIN_ERROR", @"Microphone not found", nil);
+        } @catch (NSException *exception) {
+            reject(@"SET_GAIN_ERROR", exception.reason, nil);
+        }
+    });
+}
+
+RCT_EXPORT_METHOD(getAudioGain:(NSString *)sessionId
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @try {
+            IVSBroadcastSession *session = self.sessions[sessionId];
+            if (!session) {
+                reject(@"GET_GAIN_ERROR", @"Session not found", nil);
+                return;
+            }
+            
+            NSArray<id<IVSDevice>> *attachedDevices = [session listAttachedDevices];
+            for (id<IVSDevice> device in attachedDevices) {
+                if (device.descriptor.type == IVSDeviceTypeMicrophone) {
+                    if ([device conformsToProtocol:@protocol(IVSAudioDevice)]) {
+                        id<IVSAudioDevice> audioDevice = (id<IVSAudioDevice>)device;
+                        float gain = [audioDevice gain];
+                        resolve(@(gain));
+                        return;
+                    }
+                }
+            }
+            
+            reject(@"GET_GAIN_ERROR", @"Microphone not found", nil);
+        } @catch (NSException *exception) {
+            reject(@"GET_GAIN_ERROR", exception.reason, nil);
+        }
+    });
+}
+
+// Helper methods
+- (NSString *)deviceTypeToString:(IVSDeviceType)type {
+    switch (type) {
+        case IVSDeviceTypeCamera:
+            return @"camera";
+        case IVSDeviceTypeMicrophone:
+            return @"microphone";
+        case IVSDeviceTypeUserAudio:
+            return @"userAudio";
+        case IVSDeviceTypeUserImage:
+            return @"userVideo";
+        default:
+            return @"unknown";
+    }
+}
+
+- (NSString *)devicePositionToString:(IVSDevicePosition)position {
+    switch (position) {
+        case IVSDevicePositionFront:
+            return @"front";
+        case IVSDevicePositionBack:
+            return @"back";
+        default:
+            return @"unknown";
+    }
+}
+
+// MARK: - Picture-in-Picture
+
+RCT_EXPORT_METHOD(isPictureInPictureSupported:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    if (@available(iOS 15.0, *)) {
+        BOOL supported = [AVPictureInPictureController isPictureInPictureSupported];
+        resolve(@(supported));
+    } else {
+        resolve(@NO);
+    }
+}
+
+RCT_EXPORT_METHOD(startPictureInPicture:(NSString *)sessionId
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    if (@available(iOS 15.0, *)) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            @try {
+                IVSBroadcastSession *session = self.sessions[sessionId];
+                if (!session) {
+                    reject(@"START_PIP_ERROR", @"Session not found", nil);
+                    return;
+                }
+                
+                // Session'dan preview view al
+                NSError *error = nil;
+                IVSImagePreviewView *previewView = [session previewViewWithAspectMode:IVSAspectModeFill error:&error];
+                
+                if (!previewView || error) {
+                    reject(@"START_PIP_ERROR", @"Failed to get preview view", error);
+                    return;
+                }
+                
+                // PiP controller oluştur
+                AVPictureInPictureController *pipController = [[AVPictureInPictureController alloc] initWithIVSImagePreviewView:previewView];
+                
+                if (!pipController) {
+                    reject(@"START_PIP_ERROR", @"Failed to create PiP controller", nil);
+                    return;
+                }
+                
+                pipController.delegate = self;
+                self.pipControllers[sessionId] = pipController;
+                
+                if (pipController.isPictureInPicturePossible) {
+                    [pipController startPictureInPicture];
+                    resolve(nil);
+                } else {
+                    reject(@"START_PIP_ERROR", @"Cannot start Picture-in-Picture", nil);
+                }
+            } @catch (NSException *exception) {
+                reject(@"START_PIP_ERROR", exception.reason, nil);
+            }
+        });
+    } else {
+        reject(@"START_PIP_ERROR", @"Picture-in-Picture requires iOS 15.0 or later", nil);
+    }
+}
+
+RCT_EXPORT_METHOD(stopPictureInPicture:(NSString *)sessionId
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    if (@available(iOS 15.0, *)) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            @try {
+                AVPictureInPictureController *pipController = self.pipControllers[sessionId];
+                if (!pipController) {
+                    reject(@"STOP_PIP_ERROR", @"PiP controller not found", nil);
+                    return;
+                }
+                
+                if (pipController.isPictureInPictureActive) {
+                    [pipController stopPictureInPicture];
+                }
+                
+                [self.pipControllers removeObjectForKey:sessionId];
+                resolve(nil);
+            } @catch (NSException *exception) {
+                reject(@"STOP_PIP_ERROR", exception.reason, nil);
+            }
+        });
+    } else {
+        reject(@"STOP_PIP_ERROR", @"Picture-in-Picture requires iOS 15.0 or later", nil);
+    }
+}
+
+RCT_EXPORT_METHOD(getPictureInPictureState:(NSString *)sessionId
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    if (@available(iOS 15.0, *)) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            @try {
+                AVPictureInPictureController *pipController = self.pipControllers[sessionId];
+                if (!pipController) {
+                    resolve(@"idle");
+                    return;
+                }
+                
+                if (pipController.isPictureInPictureActive) {
+                    resolve(@"active");
+                } else if (pipController.isPictureInPicturePossible) {
+                    resolve(@"idle");
+                } else {
+                    resolve(@"stopped");
+                }
+            } @catch (NSException *exception) {
+                reject(@"GET_PIP_STATE_ERROR", exception.reason, nil);
+            }
+        });
+    } else {
+        resolve(@"unsupported");
+    }
+}
+
+#pragma mark - AVPictureInPictureControllerDelegate
+
+- (void)pictureInPictureControllerWillStartPictureInPicture:(AVPictureInPictureController *)pictureInPictureController {
+    // PiP başlıyor
+}
+
+- (void)pictureInPictureControllerDidStartPictureInPicture:(AVPictureInPictureController *)pictureInPictureController {
+    // PiP başladı
+}
+
+- (void)pictureInPictureControllerWillStopPictureInPicture:(AVPictureInPictureController *)pictureInPictureController {
+    // PiP duruyor
+}
+
+- (void)pictureInPictureControllerDidStopPictureInPicture:(AVPictureInPictureController *)pictureInPictureController {
+    // PiP durdu
 }
 
 @end

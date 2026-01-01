@@ -56,6 +56,11 @@ export interface PreviewViewProps {
   isMirrored?: boolean;
 
   /**
+   * Picture-in-Picture konfigürasyonu
+   */
+  pictureInPicture?: PictureInPictureConfig;
+
+  /**
    * View stili
    */
   style?: any;
@@ -71,6 +76,18 @@ export interface PreviewViewRef {
    * Preview'ı yeniden yükle
    */
   refresh: () => void;
+  /**
+   * Picture-in-Picture modunu başlat
+   */
+  startPictureInPicture?: () => Promise<void>;
+  /**
+   * Picture-in-Picture modunu durdur
+   */
+  stopPictureInPicture?: () => Promise<void>;
+  /**
+   * Picture-in-Picture durumunu al
+   */
+  getPictureInPictureState?: () => Promise<PictureInPictureState>;
 }
 
 export type BroadcastEventType =
@@ -78,7 +95,9 @@ export type BroadcastEventType =
   | "onError"
   | "onNetworkHealth"
   | "onAudioStats"
-  | "onVideoStats";
+  | "onVideoStats"
+  | "onTransmissionStatistics"
+  | "onAudioDeviceStats";
 
 export interface BroadcastEvent {
   type: BroadcastEventType;
@@ -103,3 +122,101 @@ export interface VideoStats {
   width: number;
   height: number;
 }
+
+// Gelişmiş İstatistikler
+export interface TransmissionStatistics {
+  /** Ölçülen ortalama gönderme bitrate'i */
+  measuredBitrate: number;
+  /** SDK tarafından önerilen bitrate */
+  recommendedBitrate: number;
+  /** Ortalama round trip time (ms) */
+  rtt: number;
+  /** Yayın kalitesi */
+  broadcastQuality: BroadcastQuality;
+  /** Ağ sağlığı */
+  networkHealth: NetworkHealthLevel;
+}
+
+export type BroadcastQuality =
+  | "nearMaximum"
+  | "high"
+  | "medium"
+  | "low"
+  | "nearMinimum";
+
+export type NetworkHealthLevel =
+  | "excellent"
+  | "high"
+  | "medium"
+  | "low"
+  | "bad";
+
+// Ses Cihazı İstatistikleri
+export interface AudioDeviceStats {
+  /** Ses peak seviyesi (dBFS, -100 ile 0 arası) */
+  peak: number;
+  /** Ses RMS seviyesi (dBFS, -100 ile 0 arası) */
+  rms: number;
+}
+
+// Ağ Kalite Testi
+export interface NetworkTestResult {
+  /** Test ilerleme durumu (0-1 arası) */
+  progress: number;
+  /** Önerilen video konfigürasyonları */
+  recommendations: VideoConfig[];
+  /** Test durumu */
+  status: NetworkTestStatus;
+  /** Hata varsa */
+  error?: string;
+}
+
+export type NetworkTestStatus = "connecting" | "testing" | "success" | "error";
+
+// Cihaz Bilgileri
+export interface DeviceDescriptor {
+  /** Cihaz tipi */
+  type: DeviceType;
+  /** Cihaz pozisyonu (kameralar için) */
+  position?: DevicePosition;
+  /** Cihaz ID'si */
+  deviceId: string;
+  /** Kullanıcı dostu isim */
+  friendlyName: string;
+  /** Varsayılan cihaz mı */
+  isDefault: boolean;
+}
+
+export type DeviceType = "camera" | "microphone" | "userVideo" | "userAudio" | "userImage";
+export type DevicePosition = "front" | "back" | "unknown";
+
+// Kamera Özellikleri
+export interface CameraCapabilities {
+  /** Minimum zoom faktörü */
+  minZoomFactor: number;
+  /** Maximum zoom faktörü */
+  maxZoomFactor: number;
+  /** Flaş desteği var mı */
+  isTorchSupported: boolean;
+}
+
+// Zamanlı Metadata
+export interface TimedMetadata {
+  /** Metadata içeriği */
+  content: string;
+  /** Gönderim zamanı (opsiyonel) */
+  timestamp?: number;
+}
+
+// Picture-in-Picture
+export interface PictureInPictureConfig {
+  /** PiP modunu etkinleştir */
+  enabled?: boolean;
+  /** PiP boyutları (iOS için) */
+  aspectRatio?: {
+    width: number;
+    height: number;
+  };
+}
+
+export type PictureInPictureState = "idle" | "starting" | "active" | "stopping" | "stopped";

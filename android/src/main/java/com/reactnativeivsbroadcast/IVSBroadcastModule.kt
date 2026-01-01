@@ -1,7 +1,11 @@
 package com.reactnativeivsbroadcast
 
 import android.Manifest
+import android.app.Activity
+import android.app.PictureInPictureParams
 import android.content.pm.PackageManager
+import android.os.Build
+import android.util.Rational
 import androidx.core.content.ContextCompat
 import com.amazonaws.ivs.broadcast.*
 import com.facebook.react.bridge.*
@@ -245,6 +249,7 @@ class IVSBroadcastModule(reactContext: ReactApplicationContext) :
             val url = sessionUrls[sessionId]
                 ?: throw IllegalArgumentException("Session URL not found: $sessionId")
 
+            // Android SDK'da URL direkt URI olarak kullanılıyor, streamKey URL içinde
             session.start(url)
             promise.resolve(null)
         } catch (e: Exception) {
@@ -362,6 +367,101 @@ class IVSBroadcastModule(reactContext: ReactApplicationContext) :
         }
     }
 
+    @ReactMethod
+    fun selectCamera(sessionId: String, deviceId: String, promise: Promise) {
+        try {
+            val session = sessions[sessionId]
+                ?: throw IllegalArgumentException("Session not found: $sessionId")
+
+            // Tüm kullanılabilir cihazları listele
+            val availableDevices = session.listAvailableDevices()
+            val targetCamera = availableDevices.find { 
+                it.type == Device.Descriptor.DeviceType.CAMERA && 
+                it.deviceId == deviceId
+            } ?: throw IllegalStateException("Camera with deviceId '$deviceId' not found")
+
+            // Mevcut kamerayı bul
+            val attachedDevices = session.listAttachedDevices()
+            val currentCamera = attachedDevices.find { 
+                it.descriptor.type == Device.Descriptor.DeviceType.CAMERA 
+            }
+
+            // Kamera pozisyonunu güncelle
+            val position = if (targetCamera.position == Device.Descriptor.Position.FRONT) "front" else "back"
+
+            if (currentCamera != null) {
+                // Mevcut kamerayı yeni kamerayla değiştir
+                session.exchangeDevices(currentCamera, targetCamera) { newDevice ->
+                    if (newDevice != null) {
+                        currentCameraPosition[sessionId] = position
+                        // PreviewView'ları güncelle
+                        notifyPreviewViews(sessionId)
+                        promise.resolve(null)
+                    } else {
+                        promise.reject("SELECT_CAMERA_ERROR", "Failed to select camera")
+                    }
+                }
+            } else {
+                // Kamera yoksa yeni kamerayı ekle
+                session.attachDevice(targetCamera) { device ->
+                    if (device != null) {
+                        currentCameraPosition[sessionId] = position
+                        // PreviewView'ları güncelle
+                        notifyPreviewViews(sessionId)
+                        promise.resolve(null)
+                    } else {
+                        promise.reject("SELECT_CAMERA_ERROR", "Failed to attach camera")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            promise.reject("SELECT_CAMERA_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun selectMicrophone(sessionId: String, deviceId: String, promise: Promise) {
+        try {
+            val session = sessions[sessionId]
+                ?: throw IllegalArgumentException("Session not found: $sessionId")
+
+            // Tüm kullanılabilir cihazları listele
+            val availableDevices = session.listAvailableDevices()
+            val targetMicrophone = availableDevices.find { 
+                it.type == Device.Descriptor.DeviceType.MICROPHONE && 
+                it.deviceId == deviceId
+            } ?: throw IllegalStateException("Microphone with deviceId '$deviceId' not found")
+
+            // Mevcut mikrofonu bul
+            val attachedDevices = session.listAttachedDevices()
+            val currentMicrophone = attachedDevices.find { 
+                it.descriptor.type == Device.Descriptor.DeviceType.MICROPHONE 
+            }
+
+            if (currentMicrophone != null) {
+                // Mevcut mikrofonu yeni mikrofonla değiştir
+                session.exchangeDevices(currentMicrophone, targetMicrophone) { newDevice ->
+                    if (newDevice != null) {
+                        promise.resolve(null)
+                    } else {
+                        promise.reject("SELECT_MICROPHONE_ERROR", "Failed to select microphone")
+                    }
+                }
+            } else {
+                // Mikrofon yoksa yeni mikrofonu ekle
+                session.attachDevice(targetMicrophone) { device ->
+                    if (device != null) {
+                        promise.resolve(null)
+                    } else {
+                        promise.reject("SELECT_MICROPHONE_ERROR", "Failed to attach microphone")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            promise.reject("SELECT_MICROPHONE_ERROR", e.message, e)
+        }
+    }
+
     private fun switchToCamera(session: BroadcastSession, sessionId: String, position: String) {
         val targetPosition = if (position == "front") 
             Device.Descriptor.Position.FRONT 
@@ -384,12 +484,16 @@ class IVSBroadcastModule(reactContext: ReactApplicationContext) :
             session.exchangeDevices(currentCamera, targetCamera) { newDevice ->
                 if (newDevice != null) {
                     currentCameraPosition[sessionId] = position
+                    // PreviewView'ları güncelle
+                    notifyPreviewViews(sessionId)
                 }
             }
         } else {
             session.attachDevice(targetCamera) { device ->
                 if (device != null) {
                     currentCameraPosition[sessionId] = position
+                    // PreviewView'ları güncelle
+                    notifyPreviewViews(sessionId)
                 }
             }
         }
@@ -457,6 +561,296 @@ class IVSBroadcastModule(reactContext: ReactApplicationContext) :
                 .emit(eventName, params)
         } catch (e: Exception) {
             // Event gönderimi başarısız olursa sessizce geç
+        }
+    }
+
+    // MARK: - Gelişmiş Özellikler
+
+    @ReactMethod
+    fun listAvailableDevices(promise: Promise) {
+        try {
+            val context = reactApplicationContext
+            val session = BroadcastSession(context, null, BroadcastConfiguration(), null)
+            val devices = session.listAvailableDevices()
+            
+            val deviceArray = Arguments.createArray()
+            devices.forEach { device ->
+                val deviceMap = Arguments.createMap().apply {
+                    putString("type", deviceTypeToString(device.type))
+                    putString("position", devicePositionToString(device.position))
+                    putString("deviceId", device.deviceId ?: "")
+                    putString("friendlyName", device.friendlyName ?: "")
+                    putBoolean("isDefault", device.isDefault)
+                }
+                deviceArray.pushMap(deviceMap)
+            }
+            
+            session.release()
+            promise.resolve(deviceArray)
+        } catch (e: Exception) {
+            promise.reject("LIST_DEVICES_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun listAttachedDevices(sessionId: String, promise: Promise) {
+        try {
+            val session = sessions[sessionId]
+                ?: throw IllegalArgumentException("Session not found: $sessionId")
+
+            val devices = session.listAttachedDevices()
+            val deviceArray = Arguments.createArray()
+            
+            devices.forEach { device ->
+                val deviceMap = Arguments.createMap().apply {
+                    putString("type", deviceTypeToString(device.descriptor.type))
+                    putString("position", devicePositionToString(device.descriptor.position))
+                    putString("deviceId", device.descriptor.deviceId ?: "")
+                    putString("friendlyName", device.descriptor.friendlyName ?: "")
+                    putBoolean("isDefault", device.descriptor.isDefault)
+                }
+                deviceArray.pushMap(deviceMap)
+            }
+            
+            promise.resolve(deviceArray)
+        } catch (e: Exception) {
+            promise.reject("LIST_ATTACHED_DEVICES_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun setCameraZoom(sessionId: String, zoomFactor: Double, promise: Promise) {
+        try {
+            val session = sessions[sessionId]
+                ?: throw IllegalArgumentException("Session not found: $sessionId")
+
+            val attachedDevices = session.listAttachedDevices()
+            val cameraDevice = attachedDevices.find { 
+                it.descriptor.type == Device.Descriptor.DeviceType.CAMERA 
+            } as? ImageDevice
+
+            if (cameraDevice != null) {
+                cameraDevice.setZoomFactor(zoomFactor.toFloat())
+                promise.resolve(null)
+            } else {
+                promise.reject("SET_ZOOM_ERROR", "Camera not found")
+            }
+        } catch (e: Exception) {
+            promise.reject("SET_ZOOM_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun setTorchEnabled(sessionId: String, enabled: Boolean, promise: Promise) {
+        try {
+            val session = sessions[sessionId]
+                ?: throw IllegalArgumentException("Session not found: $sessionId")
+
+            val attachedDevices = session.listAttachedDevices()
+            val cameraDevice = attachedDevices.find { 
+                it.descriptor.type == Device.Descriptor.DeviceType.CAMERA 
+            } as? ImageDevice
+
+            if (cameraDevice != null) {
+                cameraDevice.setTorchEnabled(enabled)
+                promise.resolve(null)
+            } else {
+                promise.reject("SET_TORCH_ERROR", "Camera not found")
+            }
+        } catch (e: Exception) {
+            promise.reject("SET_TORCH_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun getCameraCapabilities(sessionId: String, promise: Promise) {
+        try {
+            val session = sessions[sessionId]
+                ?: throw IllegalArgumentException("Session not found: $sessionId")
+
+            val attachedDevices = session.listAttachedDevices()
+            val cameraDevice = attachedDevices.find { 
+                it.descriptor.type == Device.Descriptor.DeviceType.CAMERA 
+            } as? ImageDevice
+
+            if (cameraDevice != null) {
+                val capabilities = Arguments.createMap().apply {
+                    putDouble("minZoomFactor", cameraDevice.minZoomFactor.toDouble())
+                    putDouble("maxZoomFactor", cameraDevice.maxZoomFactor.toDouble())
+                    putBoolean("isTorchSupported", cameraDevice.isTorchSupported)
+                }
+                promise.resolve(capabilities)
+            } else {
+                promise.reject("GET_CAPABILITIES_ERROR", "Camera not found")
+            }
+        } catch (e: Exception) {
+            promise.reject("GET_CAPABILITIES_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun sendTimedMetadata(sessionId: String, metadata: String, promise: Promise) {
+        try {
+            val session = sessions[sessionId]
+                ?: throw IllegalArgumentException("Session not found: $sessionId")
+
+            session.sendTimedMetadata(metadata)
+            promise.resolve(null)
+        } catch (e: Exception) {
+            promise.reject("SEND_METADATA_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun setAudioGain(sessionId: String, gain: Double, promise: Promise) {
+        try {
+            val session = sessions[sessionId]
+                ?: throw IllegalArgumentException("Session not found: $sessionId")
+
+            val attachedDevices = session.listAttachedDevices()
+            val audioDevice = attachedDevices.find { 
+                it.descriptor.type == Device.Descriptor.DeviceType.MICROPHONE 
+            } as? AudioDevice
+
+            if (audioDevice != null) {
+                audioDevice.setGain(gain.toFloat())
+                promise.resolve(null)
+            } else {
+                promise.reject("SET_GAIN_ERROR", "Microphone not found")
+            }
+        } catch (e: Exception) {
+            promise.reject("SET_GAIN_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun getAudioGain(sessionId: String, promise: Promise) {
+        try {
+            val session = sessions[sessionId]
+                ?: throw IllegalArgumentException("Session not found: $sessionId")
+
+            val attachedDevices = session.listAttachedDevices()
+            val audioDevice = attachedDevices.find { 
+                it.descriptor.type == Device.Descriptor.DeviceType.MICROPHONE 
+            } as? AudioDevice
+
+            if (audioDevice != null) {
+                promise.resolve(audioDevice.gain.toDouble())
+            } else {
+                promise.reject("GET_GAIN_ERROR", "Microphone not found")
+            }
+        } catch (e: Exception) {
+            promise.reject("GET_GAIN_ERROR", e.message, e)
+        }
+    }
+
+    // Helper methods
+    private fun deviceTypeToString(type: Device.Descriptor.DeviceType): String {
+        return when (type) {
+            Device.Descriptor.DeviceType.CAMERA -> "camera"
+            Device.Descriptor.DeviceType.MICROPHONE -> "microphone"
+            Device.Descriptor.DeviceType.USER_AUDIO -> "userAudio"
+            Device.Descriptor.DeviceType.USER_VIDEO -> "userVideo"
+            Device.Descriptor.DeviceType.USER_IMAGE -> "userVideo" // Android'de USER_IMAGE de USER_VIDEO olarak map ediyoruz
+            else -> "unknown"
+        }
+    }
+
+    private fun devicePositionToString(position: Device.Descriptor.Position): String {
+        return when (position) {
+            Device.Descriptor.Position.FRONT -> "front"
+            Device.Descriptor.Position.BACK -> "back"
+            else -> "unknown"
+        }
+    }
+
+    // MARK: - Picture-in-Picture
+
+    @ReactMethod
+    fun isPictureInPictureSupported(promise: Promise) {
+        try {
+            val supported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+            promise.resolve(supported)
+        } catch (e: Exception) {
+            promise.resolve(false)
+        }
+    }
+
+    @ReactMethod
+    fun startPictureInPicture(sessionId: String, promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+                promise.reject("START_PIP_ERROR", "Picture-in-Picture requires Android 8.0 (API 26) or later")
+                return
+            }
+
+            val activity = reactApplicationContext.currentActivity
+            if (activity == null) {
+                promise.reject("START_PIP_ERROR", "Activity not found")
+                return
+            }
+
+            // PiP parametrelerini ayarla (16:9 aspect ratio)
+            val aspectRatio = Rational(16, 9)
+            val pipParams = PictureInPictureParams.Builder()
+                .setAspectRatio(aspectRatio)
+                .build()
+
+            activity.enterPictureInPictureMode(pipParams)
+            promise.resolve(null)
+        } catch (e: Exception) {
+            promise.reject("START_PIP_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun stopPictureInPicture(sessionId: String, promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+                promise.reject("STOP_PIP_ERROR", "Picture-in-Picture requires Android 8.0 (API 26) or later")
+                return
+            }
+
+            val activity = reactApplicationContext.currentActivity
+            if (activity == null) {
+                promise.reject("STOP_PIP_ERROR", "Activity not found")
+                return
+            }
+
+            // Android'de PiP'den çıkmak için Activity'yi normal moda döndürmek gerekir
+            // Bu genellikle kullanıcı tarafından yapılır, ama programatik olarak da yapılabilir
+            if (activity.isInPictureInPictureMode) {
+                // Activity'yi normal moda döndür
+                activity.moveTaskToBack(true)
+            }
+            
+            promise.resolve(null)
+        } catch (e: Exception) {
+            promise.reject("STOP_PIP_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun getPictureInPictureState(sessionId: String, promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+                promise.resolve("unsupported")
+                return
+            }
+
+            val activity = reactApplicationContext.currentActivity
+            if (activity == null) {
+                promise.resolve("idle")
+                return
+            }
+
+            if (activity.isInPictureInPictureMode) {
+                promise.resolve("active")
+            } else {
+                promise.resolve("idle")
+            }
+        } catch (e: Exception) {
+            promise.reject("GET_PIP_STATE_ERROR", e.message, e)
         }
     }
 }
