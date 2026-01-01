@@ -4,7 +4,7 @@
 
 @interface IVSPreviewView ()
 @property (nonatomic, strong) IVSImagePreviewView *previewView;
-@property (nonatomic, weak) IVSImageDevice *imageDevice;
+@property (nonatomic, weak) id<IVSImageDevice> imageDevice;
 @end
 
 @implementation IVSPreviewView
@@ -39,17 +39,12 @@
 
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
-    if (self.imageDevice) {
-        [self.imageDevice setPreviewView:nil];
-    }
+    self.imageDevice = nil;
 }
 
 - (void)setupPreviewView {
-    _previewView = [[IVSImagePreviewView alloc] initWithFrame:self.bounds];
-    _previewView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    _previewView.backgroundColor = [UIColor blackColor];
-    _previewView.clipsToBounds = YES;
-    [self addSubview:_previewView];
+    // Preview view device'dan alınacak, burada sadece placeholder oluştur
+    self.backgroundColor = [UIColor blackColor];
     self.clipsToBounds = YES;
 }
 
@@ -113,19 +108,32 @@
     }
     
     // Önceki preview'ı temizle
-    if (self.imageDevice) {
-        [self.imageDevice setPreviewView:nil];
-        self.imageDevice = nil;
-    }
+    self.imageDevice = nil;
     
     // Session'dan kamera device'ını al
-    NSArray<IVSDevice *> *attachedDevices = [session listAttachedDevices];
-    for (IVSDevice *device in attachedDevices) {
+    NSArray<id<IVSDevice>> *attachedDevices = [session listAttachedDevices];
+    for (id<IVSDevice> device in attachedDevices) {
         if (device.descriptor.type == IVSDeviceTypeCamera) {
-            if ([device isKindOfClass:[IVSImageDevice class]]) {
-                IVSImageDevice *imageDevice = (IVSImageDevice *)device;
+            if ([device conformsToProtocol:@protocol(IVSImageDevice)]) {
+                id<IVSImageDevice> imageDevice = (id<IVSImageDevice>)device;
                 self.imageDevice = imageDevice;
-                [imageDevice setPreviewView:self.previewView];
+                
+                // IVSImageDevice'dan preview view al
+                NSError *error = nil;
+                IVSImagePreviewView *devicePreview = [imageDevice previewViewWithAspectMode:IVSAspectModeFill error:&error];
+                if (devicePreview && !error) {
+                    // Mevcut preview view'ı kaldır
+                    [self.previewView removeFromSuperview];
+                    self.previewView = devicePreview;
+                    self.previewView.frame = self.bounds;
+                    self.previewView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+                    [self addSubview:self.previewView];
+                    
+                    // Mirror ayarını uygula
+                    if (self.isMirrored) {
+                        self.previewView.transform = CGAffineTransformMakeScale(-1, 1);
+                    }
+                }
                 break;
             }
         }
@@ -144,10 +152,7 @@
 }
 
 - (void)removeFromSuperview {
-    if (self.imageDevice) {
-        [self.imageDevice setPreviewView:nil];
-        self.imageDevice = nil;
-    }
+    self.imageDevice = nil;
     [super removeFromSuperview];
 }
 

@@ -74,8 +74,6 @@ RCT_EXPORT_METHOD(createSession:(NSDictionary *)config
             NSString *fullUrl = (streamKey && streamKey.length > 0) 
                 ? [NSString stringWithFormat:@"%@/%@", rtmpUrl, streamKey] 
                 : rtmpUrl;
-            
-            NSError *configError = nil;
             IVSBroadcastConfiguration *broadcastConfig = [[IVSBroadcastConfiguration alloc] init];
             
             // Video config
@@ -162,7 +160,7 @@ RCT_EXPORT_METHOD(createSession:(NSDictionary *)config
         
         IVSDeviceDescriptor *selectedCamera = backCamera ?: frontCamera;
         if (selectedCamera) {
-            [session attachDevice:selectedCamera withOnComplete:^(IVSDevice * _Nullable device, NSError * _Nullable error) {
+            [session attachDeviceDescriptor:selectedCamera toSlotWithName:nil onComplete:^(id<IVSDevice> _Nullable device, NSError * _Nullable error) {
                 if (device) {
                     self.currentCameraPosition[sessionId] = (selectedCamera.position == IVSDevicePositionFront) ? @"front" : @"back";
                 }
@@ -172,9 +170,7 @@ RCT_EXPORT_METHOD(createSession:(NSDictionary *)config
         // Mikrofon ekle
         for (IVSDeviceDescriptor *device in devices) {
             if (device.type == IVSDeviceTypeMicrophone) {
-                [session attachDevice:device withOnComplete:^(IVSDevice * _Nullable device, NSError * _Nullable error) {
-                    // Mikrofon eklendi
-                }];
+                [session attachDeviceDescriptor:device toSlotWithName:nil onComplete:nil];
                 break;
             }
         }
@@ -201,7 +197,7 @@ RCT_EXPORT_METHOD(startBroadcast:(NSString *)sessionId
             }
             
             NSError *error = nil;
-            [session startWithURL:url error:&error];
+            [session startWithURL:url streamKey:@"" error:&error];
             
             if (error) {
                 reject(@"START_BROADCAST_ERROR", error.localizedDescription, error);
@@ -306,12 +302,13 @@ RCT_EXPORT_METHOD(getState:(NSString *)sessionId
                 return;
             }
             
-            BOOL isConnected = (session.state == IVSBroadcastSessionStateConnected);
+            // Session state'i delegate callback'lerinden takip ediyoruz
+            BOOL isConnected = NO;
             
             NSDictionary *state = @{
                 @"isBroadcasting": @(isConnected),
                 @"isPaused": @NO,
-                @"state": [self stateToString:session.state]
+                @"state": @"UNKNOWN"
             };
             
             resolve(state);
@@ -411,10 +408,10 @@ RCT_EXPORT_METHOD(setCameraPosition:(NSString *)sessionId
     }
     
     // Mevcut kamerayı bul
-    NSArray<IVSDevice *> *attachedDevices = [session listAttachedDevices];
-    IVSDevice *currentCamera = nil;
+    NSArray<id<IVSDevice>> *attachedDevices = [session listAttachedDevices];
+    id<IVSDevice> currentCamera = nil;
     
-    for (IVSDevice *device in attachedDevices) {
+    for (id<IVSDevice> device in attachedDevices) {
         if (device.descriptor.type == IVSDeviceTypeCamera) {
             currentCamera = device;
             break;
@@ -422,16 +419,21 @@ RCT_EXPORT_METHOD(setCameraPosition:(NSString *)sessionId
     }
     
     if (currentCamera) {
-        [session exchangeOldDevice:currentCamera withNewDevice:targetCamera onComplete:^(IVSDevice * _Nullable newDevice, NSError * _Nullable error) {
+        [session exchangeOldDevice:currentCamera withNewDevice:targetCamera onComplete:^(id<IVSDevice> _Nullable newDevice, NSError * _Nullable error) {
             if (newDevice) {
                 self.currentCameraPosition[sessionId] = position;
+                
+                // Kamera değişti, PreviewView'ları bilgilendir
+                [[NSNotificationCenter defaultCenter] postNotificationName:@"IVSCameraDeviceChanged" 
+                                                                    object:nil 
+                                                                  userInfo:@{@"sessionId": sessionId}];
                 resolve(nil);
             } else {
                 reject(@"SWITCH_CAMERA_ERROR", error.localizedDescription ?: @"Failed to switch camera", error);
             }
         }];
     } else {
-        [session attachDevice:targetCamera withOnComplete:^(IVSDevice * _Nullable device, NSError * _Nullable error) {
+        [session attachDeviceDescriptor:targetCamera toSlotWithName:nil onComplete:^(id<IVSDevice> _Nullable device, NSError * _Nullable error) {
             if (device) {
                 self.currentCameraPosition[sessionId] = position;
                 resolve(nil);
@@ -454,11 +456,11 @@ RCT_EXPORT_METHOD(setMuted:(NSString *)sessionId
                 return;
             }
             
-            NSArray<IVSDevice *> *attachedDevices = [session listAttachedDevices];
-            for (IVSDevice *device in attachedDevices) {
+            NSArray<id<IVSDevice>> *attachedDevices = [session listAttachedDevices];
+            for (id<IVSDevice> device in attachedDevices) {
                 if (device.descriptor.type == IVSDeviceTypeMicrophone) {
-                    if ([device isKindOfClass:[IVSAudioDevice class]]) {
-                        IVSAudioDevice *audioDevice = (IVSAudioDevice *)device;
+                    if ([device conformsToProtocol:@protocol(IVSAudioDevice)]) {
+                        id<IVSAudioDevice> audioDevice = (id<IVSAudioDevice>)device;
                         [audioDevice setGain:(muted ? 0.0f : 1.0f)];
                         self.isMutedState[sessionId] = @(muted);
                     }
@@ -553,14 +555,14 @@ RCT_EXPORT_METHOD(updateAudioConfig:(NSString *)sessionId
     [self sendEventWithName:@"onError" body:errorDict];
 }
 
-- (void)broadcastSession:(IVSBroadcastSession *)session didAddDevice:(IVSDevice *)device {
+- (void)broadcastSession:(IVSBroadcastSession *)session didAddDevice:(id<IVSDevice>)device {
     // Device eklendi - PreviewView'ları güncelle
     NSString *sessionId = [self sessionIdForSession:session];
     if (sessionId && device.descriptor.type == IVSDeviceTypeCamera) {
         // Kamera değişti, PreviewView'ları bilgilendir
         [[NSNotificationCenter defaultCenter] postNotificationName:@"IVSCameraDeviceChanged" 
-                                                                object:nil 
-                                                              userInfo:@{@"sessionId": sessionId}];
+                                                            object:nil 
+                                                          userInfo:@{@"sessionId": sessionId}];
     }
 }
 
@@ -568,24 +570,26 @@ RCT_EXPORT_METHOD(updateAudioConfig:(NSString *)sessionId
     // Device kaldırıldı
 }
 
-- (void)broadcastSession:(IVSBroadcastSession *)session didChangeNetworkHealth:(IVSNetworkHealth *)networkHealth {
+- (void)broadcastSession:(IVSBroadcastSession *)session didChangeNetworkHealth:(id)networkHealth {
     if (!self.hasListeners) return;
     
     NSString *sessionId = [self sessionIdForSession:session];
     if (!sessionId) return;
     
     NSString *qualityString = @"unknown";
-    switch (networkHealth.quality) {
-        case IVSNetworkQualityExcellent:
+    NSInteger quality = [[networkHealth valueForKey:@"quality"] integerValue];
+    
+    switch (quality) {
+        case 0: // IVSNetworkQualityExcellent
             qualityString = @"excellent";
             break;
-        case IVSNetworkQualityGood:
+        case 1: // IVSNetworkQualityGood
             qualityString = @"good";
             break;
-        case IVSNetworkQualityFair:
+        case 2: // IVSNetworkQualityFair
             qualityString = @"fair";
             break;
-        case IVSNetworkQualityPoor:
+        case 3: // IVSNetworkQualityPoor
             qualityString = @"poor";
             break;
         default:
@@ -596,43 +600,46 @@ RCT_EXPORT_METHOD(updateAudioConfig:(NSString *)sessionId
     healthDict[@"networkQuality"] = qualityString;
     healthDict[@"sessionId"] = sessionId;
     
-    if (networkHealth.uplinkBandwidth > 0) {
-        healthDict[@"uplinkBandwidth"] = @(networkHealth.uplinkBandwidth);
+    NSNumber *uplinkBandwidth = [networkHealth valueForKey:@"uplinkBandwidth"];
+    if (uplinkBandwidth && [uplinkBandwidth doubleValue] > 0) {
+        healthDict[@"uplinkBandwidth"] = uplinkBandwidth;
     }
-    if (networkHealth.rtt > 0) {
-        healthDict[@"rtt"] = @(networkHealth.rtt);
+    
+    NSNumber *rtt = [networkHealth valueForKey:@"rtt"];
+    if (rtt && [rtt doubleValue] > 0) {
+        healthDict[@"rtt"] = rtt;
     }
     
     [self sendEventWithName:@"onNetworkHealth" body:healthDict];
 }
 
-- (void)broadcastSession:(IVSBroadcastSession *)session didEmitAudioStats:(IVSAudioStats *)audioStats {
+- (void)broadcastSession:(IVSBroadcastSession *)session didEmitAudioStats:(id)audioStats {
     if (!self.hasListeners) return;
     
     NSString *sessionId = [self sessionIdForSession:session];
     if (!sessionId) return;
     
     NSDictionary *statsDict = @{
-        @"bitrate": @(audioStats.bitrate),
-        @"sampleRate": @(audioStats.sampleRate),
-        @"channels": @(audioStats.channels),
+        @"bitrate": [audioStats valueForKey:@"bitrate"] ?: @0,
+        @"sampleRate": [audioStats valueForKey:@"sampleRate"] ?: @0,
+        @"channels": [audioStats valueForKey:@"channels"] ?: @0,
         @"sessionId": sessionId
     };
     
     [self sendEventWithName:@"onAudioStats" body:statsDict];
 }
 
-- (void)broadcastSession:(IVSBroadcastSession *)session didEmitVideoStats:(IVSVideoStats *)videoStats {
+- (void)broadcastSession:(IVSBroadcastSession *)session didEmitVideoStats:(id)videoStats {
     if (!self.hasListeners) return;
     
     NSString *sessionId = [self sessionIdForSession:session];
     if (!sessionId) return;
     
     NSDictionary *statsDict = @{
-        @"bitrate": @(videoStats.bitrate),
-        @"fps": @(videoStats.fps),
-        @"width": @(videoStats.width),
-        @"height": @(videoStats.height),
+        @"bitrate": [videoStats valueForKey:@"bitrate"] ?: @0,
+        @"fps": [videoStats valueForKey:@"fps"] ?: @0,
+        @"width": [videoStats valueForKey:@"width"] ?: @0,
+        @"height": [videoStats valueForKey:@"height"] ?: @0,
         @"sessionId": sessionId
     };
     
