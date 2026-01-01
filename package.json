@@ -1,6 +1,6 @@
 {
     "name": "@abdurrahman-dev/react-native-ivs-broadcast",
-    "version": "0.2.2",
+    "version": "0.2.3",
     "description": "React Native bridge for Amazon IVS Broadcast SDK (Android 1.37.1, iOS 1.37.0)",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
@@ -38,8 +38,10 @@
     },
     "devDependencies": {
         "@types/react": "^19.0.0",
+        "@types/react-native": "^0.72.8",
         "@typescript-eslint/eslint-plugin": "^5.0.0",
         "@typescript-eslint/parser": "^5.0.0",
+        "amazon-ivs-react-native-player": "^1.5.0",
         "eslint": "^8.0.0",
         "typescript": "^5.0.0"
     },
@@ -49,13 +51,12 @@
         "lib/",
         "src/",
         "react-native.config.js",
+        "react-native-ivs-broadcast.podspec",
         "README.md",
         "LICENSE"
     ],
     "engines": {
         "node": ">=16.0.0"
     },
-    "dependencies": {
-        "@types/react-native": "^0.72.8"
-    }
+    "dependencies": {}
 }

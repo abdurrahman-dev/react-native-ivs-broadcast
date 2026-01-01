@@ -14,6 +14,9 @@ import type {
 
 const { IVSBroadcastModule } = NativeModules;
 
+// Native modül kontrolü - modül yoksa hata fırlatmak yerine uyarı ver
+let eventEmitter: NativeEventEmitter | null = null;
+
 if (!IVSBroadcastModule) {
   if (__DEV__) {
     console.warn(
@@ -21,16 +24,25 @@ if (!IVSBroadcastModule) {
       "Make sure you have properly linked the module and rebuilt the app with 'npx expo run:ios'."
     );
   }
-  throw new Error(
-    "IVSBroadcastModule native module is not available. " +
-    "This module requires a development build. Please run 'npx expo run:ios' to rebuild the app."
-  );
+  // Modül yoksa eventEmitter'ı null bırak, hata fırlatma
+} else {
+  eventEmitter = new NativeEventEmitter(IVSBroadcastModule);
 }
-
-const eventEmitter = new NativeEventEmitter(IVSBroadcastModule);
 
 class IVSBroadcast {
   private listeners: Map<string, Array<(data: any) => void>> = new Map();
+
+  /**
+   * Native modülün mevcut olup olmadığını kontrol eder
+   */
+  private checkModuleAvailable(): void {
+    if (!IVSBroadcastModule) {
+      throw new Error(
+        "IVSBroadcastModule native module is not available. " +
+        "This module requires a development build. Please run 'npx expo run:ios' to rebuild the app."
+      );
+    }
+  }
 
   /**
    * Yeni bir broadcast session oluşturur
@@ -38,6 +50,8 @@ class IVSBroadcast {
   async createSession(
     config: IVSBroadcastConfig
   ): Promise<IVSBroadcastSession> {
+    this.checkModuleAvailable();
+    
     if (!config.rtmpUrl) {
       throw new Error("RTMP URL is required");
     }
@@ -54,6 +68,7 @@ class IVSBroadcast {
    * Broadcast'i başlatır
    */
   async startBroadcast(sessionId: string): Promise<void> {
+    this.checkModuleAvailable();
     try {
       await IVSBroadcastModule.startBroadcast(sessionId);
     } catch (error: any) {
@@ -65,6 +80,7 @@ class IVSBroadcast {
    * Broadcast'i durdurur
    */
   async stopBroadcast(sessionId: string): Promise<void> {
+    this.checkModuleAvailable();
     try {
       await IVSBroadcastModule.stopBroadcast(sessionId);
     } catch (error: any) {
@@ -76,6 +92,7 @@ class IVSBroadcast {
    * Broadcast'i duraklatır
    */
   async pauseBroadcast(sessionId: string): Promise<void> {
+    this.checkModuleAvailable();
     try {
       await IVSBroadcastModule.pauseBroadcast(sessionId);
     } catch (error: any) {
@@ -87,6 +104,7 @@ class IVSBroadcast {
    * Duraklatılmış broadcast'i devam ettirir
    */
   async resumeBroadcast(sessionId: string): Promise<void> {
+    this.checkModuleAvailable();
     try {
       await IVSBroadcastModule.resumeBroadcast(sessionId);
     } catch (error: any) {
@@ -98,6 +116,7 @@ class IVSBroadcast {
    * Broadcast session'ı yok eder
    */
   async destroySession(sessionId: string): Promise<void> {
+    this.checkModuleAvailable();
     try {
       await IVSBroadcastModule.destroySession(sessionId);
     } catch (error: any) {
@@ -109,6 +128,7 @@ class IVSBroadcast {
    * Broadcast durumunu alır
    */
   async getState(sessionId: string): Promise<BroadcastState> {
+    this.checkModuleAvailable();
     try {
       return await IVSBroadcastModule.getState(sessionId);
     } catch (error: any) {
@@ -120,6 +140,7 @@ class IVSBroadcast {
    * Kamera pozisyonunu değiştirir
    */
   async switchCamera(sessionId: string): Promise<void> {
+    this.checkModuleAvailable();
     try {
       await IVSBroadcastModule.switchCamera(sessionId);
     } catch (error: any) {
@@ -134,6 +155,7 @@ class IVSBroadcast {
     sessionId: string,
     position: "front" | "back"
   ): Promise<void> {
+    this.checkModuleAvailable();
     try {
       await IVSBroadcastModule.setCameraPosition(sessionId, position);
     } catch (error: any) {
@@ -145,6 +167,7 @@ class IVSBroadcast {
    * Mikrofonu açıp kapatır
    */
   async setMuted(sessionId: string, muted: boolean): Promise<void> {
+    this.checkModuleAvailable();
     try {
       await IVSBroadcastModule.setMuted(sessionId, muted);
     } catch (error: any) {
@@ -156,6 +179,7 @@ class IVSBroadcast {
    * Mikrofon durumunu alır
    */
   async isMuted(sessionId: string): Promise<boolean> {
+    this.checkModuleAvailable();
     try {
       return await IVSBroadcastModule.isMuted(sessionId);
     } catch (error: any) {
@@ -170,6 +194,7 @@ class IVSBroadcast {
     sessionId: string,
     config: VideoConfig
   ): Promise<void> {
+    this.checkModuleAvailable();
     try {
       await IVSBroadcastModule.updateVideoConfig(sessionId, config);
     } catch (error: any) {
@@ -184,6 +209,7 @@ class IVSBroadcast {
     sessionId: string,
     config: AudioConfig
   ): Promise<void> {
+    this.checkModuleAvailable();
     try {
       await IVSBroadcastModule.updateAudioConfig(sessionId, config);
     } catch (error: any) {
@@ -216,6 +242,12 @@ class IVSBroadcast {
     callback: (stats: VideoStats) => void
   ): () => void;
   addListener(eventType: string, callback: (data: any) => void): () => void {
+    if (!eventEmitter) {
+      console.warn("EventEmitter is not available. Native module may not be linked.");
+      // Modül yoksa boş bir cleanup fonksiyonu döndür
+      return () => {};
+    }
+
     if (!this.listeners.has(eventType)) {
       this.listeners.set(eventType, []);
     }
@@ -245,6 +277,8 @@ class IVSBroadcast {
    * Event listener'ı kaldırır
    */
   removeListener(eventType: string, callback?: (data: any) => void): void {
+    if (!eventEmitter) return;
+    
     const callbacks = this.listeners.get(eventType);
     if (callbacks) {
       if (callback) {
@@ -263,6 +297,8 @@ class IVSBroadcast {
    * Tüm listener'ları temizler
    */
   removeAllListeners(eventType?: string): void {
+    if (!eventEmitter) return;
+    
     if (eventType) {
       this.listeners.delete(eventType);
       eventEmitter.removeAllListeners(eventType);
@@ -270,7 +306,7 @@ class IVSBroadcast {
       this.listeners.clear();
       // Tüm event type'ları için listener'ları temizle
       this.listeners.forEach((_, type) => {
-        eventEmitter.removeAllListeners(type);
+        eventEmitter!.removeAllListeners(type);
       });
       this.listeners.clear();
     }

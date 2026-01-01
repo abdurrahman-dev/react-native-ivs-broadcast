@@ -11,19 +11,9 @@ import {
 } from "react-native";
 import * as MediaLibrary from "expo-media-library";
 import { Camera } from "expo-camera";
-
-// IVS Broadcast modülünü import et
-// Not: Native modül sadece development build'de çalışır
-let IVSBroadcast = null;
-let PreviewView = null;
-
-try {
-  const ivs = require("@abdurrahman-dev/react-native-ivs-broadcast");
-  IVSBroadcast = ivs.default;
-  PreviewView = ivs.PreviewView;
-} catch (e) {
-  console.log("IVS Broadcast modülü yüklenemedi:", e);
-}
+import IVSBroadcast, {
+  PreviewView,
+} from "@abdurrahman-dev/react-native-ivs-broadcast";
 
 // Test için RTMP URL'i (kendi URL'inizi girin)
 const TEST_RTMP_URL = "rtmp://your-ingest-server.com/live";

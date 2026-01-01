@@ -1,7 +1,11 @@
 PODS:
+  - amazon-ivs-react-native-player (1.5.0):
+    - AmazonIVSPlayer (~> 1.23.0)
+    - React-Core
   - AmazonIVSBroadcast (1.37.0):
     - AmazonIVSBroadcast/Core (= 1.37.0)
   - AmazonIVSBroadcast/Core (1.37.0)
+  - AmazonIVSPlayer (1.23.0)
   - EXConstants (18.0.12):
     - ExpoModulesCore
   - Expo (54.0.30):
@@ -73,9 +77,6 @@ PODS:
   - hermes-engine (0.81.5):
     - hermes-engine/Pre-built (= 0.81.5)
   - hermes-engine/Pre-built (0.81.5)
-  - IVSBroadcast (0.2.2):
-    - AmazonIVSBroadcast (~> 1.37.0)
-    - React-Core
   - RCTDeprecation (0.81.5)
   - RCTRequired (0.81.5)
   - RCTTypeSafety (0.81.5):
@@ -1355,6 +1356,9 @@ PODS:
     - React-RCTFBReactNativeSpec
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
+  - react-native-ivs-broadcast (0.2.3):
+    - AmazonIVSBroadcast (~> 1.37.0)
+    - React-Core
   - React-NativeModulesApple (0.81.5):
     - hermes-engine
     - React-callinvoker
@@ -1713,6 +1717,7 @@ PODS:
     - ZXingObjC/Core
 
 DEPENDENCIES:
+  - amazon-ivs-react-native-player (from `../node_modules/amazon-ivs-react-native-player`)
   - EXConstants (from `../node_modules/expo/node_modules/expo-constants/ios`)
   - Expo (from `../node_modules/expo`)
   - ExpoAsset (from `../node_modules/expo/node_modules/expo-asset/ios`)
@@ -1725,7 +1730,6 @@ DEPENDENCIES:
   - ExpoModulesCore (from `../node_modules/expo-modules-core`)
   - FBLazyVector (from `../node_modules/react-native/Libraries/FBLazyVector`)
   - hermes-engine (from `../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)
-  - "IVSBroadcast (from `../node_modules/@abdurrahman-dev/react-native-ivs-broadcast/ios`)"
   - RCTDeprecation (from `../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation`)
   - RCTRequired (from `../node_modules/react-native/Libraries/Required`)
   - RCTTypeSafety (from `../node_modules/react-native/Libraries/TypeSafety`)
@@ -1760,6 +1764,7 @@ DEPENDENCIES:
   - React-logger (from `../node_modules/react-native/ReactCommon/logger`)
   - React-Mapbuffer (from `../node_modules/react-native/ReactCommon`)
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
+  - "react-native-ivs-broadcast (from `../node_modules/@abdurrahman-dev/react-native-ivs-broadcast`)"
   - React-NativeModulesApple (from `../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
   - React-oscompat (from `../node_modules/react-native/ReactCommon/oscompat`)
   - React-perflogger (from `../node_modules/react-native/ReactCommon/reactperflogger`)
@@ -1796,9 +1801,12 @@ DEPENDENCIES:
 SPEC REPOS:
   trunk:
     - AmazonIVSBroadcast
+    - AmazonIVSPlayer
     - ZXingObjC
 
 EXTERNAL SOURCES:
+  amazon-ivs-react-native-player:
+    :path: "../node_modules/amazon-ivs-react-native-player"
   EXConstants:
     :path: "../node_modules/expo/node_modules/expo-constants/ios"
   Expo:
@@ -1824,8 +1832,6 @@ EXTERNAL SOURCES:
   hermes-engine:
     :podspec: "../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec"
     :tag: hermes-2025-07-07-RNv0.81.0-e0fc67142ec0763c6b6153ca2bf96df815539782
-  IVSBroadcast:
-    :path: "../node_modules/@abdurrahman-dev/react-native-ivs-broadcast/ios"
   RCTDeprecation:
     :path: "../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation"
   RCTRequired:
@@ -1892,6 +1898,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon"
   React-microtasksnativemodule:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/microtasks"
+  react-native-ivs-broadcast:
+    :path: "../node_modules/@abdurrahman-dev/react-native-ivs-broadcast"
   React-NativeModulesApple:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios"
   React-oscompat:
@@ -1958,7 +1966,9 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
 SPEC CHECKSUMS:
+  amazon-ivs-react-native-player: b7a00b9d91f8206b1fa6c85caee17528efbe423c
   AmazonIVSBroadcast: f5c2c2ef8674753e4c451922e6bb00a0f97bde9f
+  AmazonIVSPlayer: 056aa543826328b578f51d5f3a1ac47b227d813d
   EXConstants: 6c818a84354d194cb4d5d78990108a7c0f590e30
   Expo: 2cf54b756f8988bb3a4e6f7e78a2442c715b272a
   ExpoAsset: d999f3bbd998a750f3b74cb913229848901b926b
@@ -1971,7 +1981,6 @@ SPEC CHECKSUMS:
   ExpoModulesCore: 77496909fd3c800f97f7f2007dd26aeac4bb3798
   FBLazyVector: e95a291ad2dadb88e42b06e0c5fb8262de53ec12
   hermes-engine: 9f4dfe93326146a1c99eb535b1cb0b857a3cd172
-  IVSBroadcast: 77d54cd6573fcbbd7359f1f7d0b761fbe98d8128
   RCTDeprecation: 943572d4be82d480a48f4884f670135ae30bf990
   RCTRequired: 8f3cfc90cc25cf6e420ddb3e7caaaabc57df6043
   RCTTypeSafety: 16a4144ca3f959583ab019b57d5633df10b5e97c
@@ -2005,6 +2014,7 @@ SPEC CHECKSUMS:
   React-logger: c3e2f8a2e284341205f61eef3d4677ab5a309dfd
   React-Mapbuffer: 603c18db65844bb81dbe62fee8fcc976eaeb7108
   React-microtasksnativemodule: d77e0c426fce34c23227394c96ca1033b30c813c
+  react-native-ivs-broadcast: c3e06b52534ece5b7f5773153c1e08d19cc19f44
   React-NativeModulesApple: 1664340b8750d64e0ef3907c5e53d9481f74bcbd
   React-oscompat: ce47230ed20185e91de62d8c6d139ae61763d09c
   React-perflogger: b1af3cfb3f095f819b2814910000392a8e17ba9f
@@ -2039,6 +2049,6 @@ SPEC CHECKSUMS:
   Yoga: 3fd22c2cae22d7a2b0f0b538f55f7c2a17dc94d5
   ZXingObjC: 8898711ab495761b2dbbdec76d90164a6d7e14c5
 
-PODFILE CHECKSUM: 485d7d14a6665e48ae4dfa312bba0dd9deaa5366
+PODFILE CHECKSUM: cb789cf998b78dbc330937b3e750aec91de1dfdc
 
 COCOAPODS: 1.16.2

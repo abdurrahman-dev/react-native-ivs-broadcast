@@ -45,20 +45,32 @@ cd ..
 
 **Expo Projeleri İçin:**
 
-Expo-modules-autolinking bazen paketi bulamayabilir. Bu durumda `ios/Podfile` dosyanıza manuel olarak ekleyin:
+**Önemli:** Expo-modules-autolinking bazen React Native paketlerini bulamayabilir. Bu durumda `ios/Podfile` dosyanıza **manuel olarak** eklemeniz gerekir:
 
 ```ruby
 target 'YourApp' do
-  # ... mevcut kodlar ...
+  use_expo_modules!
+  
+  config = use_native_modules!(config_command)
   
   # IVSBroadcast paketini manuel olarak ekle
+  # Expo-modules-autolinking bazen React Native paketlerini bulamayabiliyor
   pod 'IVSBroadcast', :path => '../node_modules/@abdurrahman-dev/react-native-ivs-broadcast/ios'
   
   # ... diğer kodlar ...
 end
 ```
 
-Ardından development build'i yeniden oluşturun:
+**Neden Manuel Ekleme Gerekli?**
+
+Expo-modules-autolinking şu şekilde çalışır:
+1. `expo-modules-autolinking react-native-config` komutunu çalıştırır
+2. React Native'in autolinking mekanizmasını kullanır
+3. Ancak bazı React Native paketlerini filtreleyebilir veya bulamayabilir
+
+Bu yüzden manuel ekleme gerekebilir.
+
+**Kurulum:**
 
 ```bash
 # iOS için
@@ -69,6 +81,14 @@ npx expo run:ios
 
 # Android için
 npx expo run:android
+```
+
+**Alternatif Çözüm:**
+
+Eğer React Native'in doğrudan autolinking'ini kullanmak isterseniz:
+
+```bash
+EXPO_USE_COMMUNITY_AUTOLINKING=1 npx expo run:ios
 ```
 
 **Önemli:** Native modüller sadece development build'de çalışır. Expo Go'da çalışmazlar.

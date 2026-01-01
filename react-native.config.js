@@ -8,7 +8,7 @@ module.exports = {
         packageInstance: "new IVSBroadcastPackage()",
       },
       ios: {
-        podspecPath: "./ios/IVSBroadcast.podspec",
+        podspecPath: "./react-native-ivs-broadcast.podspec",
       },
     },
   },

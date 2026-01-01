@@ -38,10 +38,6 @@ target 'example' do
 
   config = use_native_modules!(config_command)
 
-  # IVSBroadcast paketini manuel olarak ekle
-  # Expo-modules-autolinking bazen React Native paketlerini bulamayabiliyor
-  pod 'IVSBroadcast', :path => '../node_modules/@abdurrahman-dev/react-native-ivs-broadcast/ios'
-
   use_frameworks! :linkage => podfile_properties['ios.useFrameworks'].to_sym if podfile_properties['ios.useFrameworks']
   use_frameworks! :linkage => ENV['USE_FRAMEWORKS'].to_sym if ENV['USE_FRAMEWORKS']
 
