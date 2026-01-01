@@ -15,8 +15,15 @@ import type {
 const { IVSBroadcastModule } = NativeModules;
 
 if (!IVSBroadcastModule) {
+  if (__DEV__) {
+    console.warn(
+      "IVSBroadcastModule native module is not available. " +
+      "Make sure you have properly linked the module and rebuilt the app with 'npx expo run:ios'."
+    );
+  }
   throw new Error(
-    "IVSBroadcastModule native module is not available. Make sure you have properly linked the module."
+    "IVSBroadcastModule native module is not available. " +
+    "This module requires a development build. Please run 'npx expo run:ios' to rebuild the app."
   );
 }
 

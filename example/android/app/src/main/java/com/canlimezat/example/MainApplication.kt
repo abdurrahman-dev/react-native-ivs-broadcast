@@ -1,4 +1,4 @@
-package com.example
+package com.canlimezat.example
 
 import android.app.Application
 import android.content.res.Configuration

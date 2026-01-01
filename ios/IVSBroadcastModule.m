@@ -13,7 +13,7 @@ static IVSBroadcastModule *sharedInstance = nil;
 
 @implementation IVSBroadcastModule
 
-RCT_EXPORT_MODULE();
+RCT_EXPORT_MODULE(IVSBroadcastModule);
 
 + (instancetype)sharedInstance {
     return sharedInstance;

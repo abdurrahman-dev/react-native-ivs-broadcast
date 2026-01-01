@@ -3,6 +3,12 @@
     "name": "example",
     "slug": "example",
     "version": "1.0.0",
-    "entryPoint": "./App.js"
+    "entryPoint": "./App.js",
+    "android": {
+      "package": "com.canlimezat.example"
+    },
+    "ios": {
+      "bundleIdentifier": "com.canlimezat.example"
+    }
   }
 }

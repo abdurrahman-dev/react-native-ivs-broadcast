@@ -43,7 +43,35 @@ pod install
 cd ..
 ```
 
-**Not:** Expo projelerinde de aynı şekilde çalışır. Expo'nun autolinking mekanizması React Native'in autolinking'ini kullanır.
+**Expo Projeleri İçin:**
+
+Expo-modules-autolinking bazen paketi bulamayabilir. Bu durumda `ios/Podfile` dosyanıza manuel olarak ekleyin:
+
+```ruby
+target 'YourApp' do
+  # ... mevcut kodlar ...
+  
+  # IVSBroadcast paketini manuel olarak ekle
+  pod 'IVSBroadcast', :path => '../node_modules/@abdurrahman-dev/react-native-ivs-broadcast/ios'
+  
+  # ... diğer kodlar ...
+end
+```
+
+Ardından development build'i yeniden oluşturun:
+
+```bash
+# iOS için
+cd ios
+pod install
+cd ..
+npx expo run:ios
+
+# Android için
+npx expo run:android
+```
+
+**Önemli:** Native modüller sadece development build'de çalışır. Expo Go'da çalışmazlar.
 
 **Sorun yaşıyorsanız:**
 
