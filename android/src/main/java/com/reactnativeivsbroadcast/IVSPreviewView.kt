@@ -15,9 +15,11 @@ class IVSPreviewView(context: Context) : FrameLayout(context), SurfaceHolder.Cal
     private var sessionId: String? = null
     private var aspectMode: String = "fill"
     private var isMirrored: Boolean = true
+    private var retryHandler: android.os.Handler? = null
     
     init {
         setupSurfaceView()
+        retryHandler = android.os.Handler(android.os.Looper.getMainLooper())
     }
     
     private fun setupSurfaceView() {
@@ -51,6 +53,10 @@ class IVSPreviewView(context: Context) : FrameLayout(context), SurfaceHolder.Cal
         val session = getSession() ?: return
         val surface = surfaceView?.holder?.surface ?: return
         
+        // Önceki preview'ı temizle
+        imageDevice?.setPreviewSurface(null)
+        imageDevice = null
+        
         // Session'dan kamera device'ını al
         val attachedDevices = session.listAttachedDevices()
         val cameraDevice = attachedDevices.find { 
@@ -60,6 +66,11 @@ class IVSPreviewView(context: Context) : FrameLayout(context), SurfaceHolder.Cal
         if (cameraDevice != null) {
             imageDevice = cameraDevice
             cameraDevice.setPreviewSurface(surface)
+        } else {
+            // Kamera henüz hazır değilse, biraz bekleyip tekrar dene
+            retryHandler?.postDelayed({
+                attachToSession()
+            }, 300)
         }
     }
     
@@ -84,6 +95,7 @@ class IVSPreviewView(context: Context) : FrameLayout(context), SurfaceHolder.Cal
     
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        retryHandler?.removeCallbacksAndMessages(null)
         imageDevice?.setPreviewSurface(null)
         imageDevice = null
     }

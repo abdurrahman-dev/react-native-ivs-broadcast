@@ -1,17 +1,33 @@
-node_modules/
-*.log
-.DS_Store
+# Example project
+example/
+
+# Development files
+.git/
+.github/
 .vscode/
 .idea/
-*.tsbuildinfo
-*.swp
-*.swo
-*~
-example/
-.git/
-.gitignore
-.eslintrc*
-KNOWN_ISSUES.md
-NPM_PUBLISH.md
+
+# Documentation
 *.md
 !README.md
+!LICENSE
+
+# Build artifacts
+*.log
+*.tgz
+
+# Test files
+__tests__/
+*.test.ts
+*.spec.ts
+coverage/
+
+# TypeScript source (lib is published)
+# src/ - included for source maps
+
+# Node modules
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db

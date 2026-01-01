@@ -1,79 +1,69 @@
 # @abdurrahman-dev/react-native-ivs-broadcast
 
-React Native için Amazon Interactive Video Service (IVS) Broadcast SDK köprü paketi. Bu paket, Amazon IVS Broadcast SDK'nın native yeteneklerini React Native projelerinde kullanmanızı sağlar.
+React Native için Amazon IVS Broadcast SDK köprü paketi. Canlı yayın başlatma, kamera önizleme ve yayın kontrolü için kullanılır.
 
 ## Özellikler
 
-- ✅ Android 1.37.1 ve iOS 1.37.0 desteği
-- ✅ Broadcast başlatma/durdurma/duraklatma/devam ettirme
-- ✅ **Preview View** - Kamera önizleme component'i
-- ✅ Kamera kontrolü (ön/arka kamera değiştirme)
-- ✅ Mikrofon kontrolü (sessize alma/açma)
+- ✅ Broadcast başlatma/durdurma
+- ✅ Kamera önizleme component'i
+- ✅ Kamera kontrolü (ön/arka değiştirme)
+- ✅ Mikrofon kontrolü
 - ✅ Video ve ses konfigürasyonu
-- ✅ Network health monitoring
-- ✅ Real-time istatistikler (audio/video stats)
 - ✅ Event-based API
 
 ## Kurulum
 
-### npm
-
 ```bash
 npm install @abdurrahman-dev/react-native-ivs-broadcast
-```
-
-### yarn
-
-```bash
+# veya
 yarn add @abdurrahman-dev/react-native-ivs-broadcast
 ```
 
-## Platform Kurulumu
-
 ### Android
 
-1. `android/app/build.gradle` dosyanıza aşağıdaki bağımlılığı ekleyin:
+`android/app/build.gradle` dosyanıza ekleyin:
 
 ```gradle
 dependencies {
-    implementation 'com.amazonaws:ivs-broadcast:1.37.1:stages@aar'
+    implementation 'com.amazonaws:ivs-broadcast:1.37.1'
 }
 ```
 
-2. `android/build.gradle` dosyanıza `mavenCentral()` repository'sini ekleyin:
-
-```gradle
-allprojects {
-    repositories {
-        mavenCentral()
-        // ... diğer repository'ler
-    }
-}
-```
-
-3. `AndroidManifest.xml` dosyanıza gerekli izinleri ekleyin (paket içinde zaten mevcut):
-
-```xml
-<uses-permission android:name="android.permission.CAMERA" />
-<uses-permission android:name="android.permission.RECORD_AUDIO" />
-<uses-permission android:name="android.permission.INTERNET" />
-```
+`android/build.gradle` dosyanıza `mavenCentral()` repository'sini ekleyin.
 
 ### iOS
 
-1. `ios/Podfile` dosyanıza aşağıdaki satırı ekleyin:
+Paket **otomatik olarak** `AmazonIVSBroadcast` pod'unu dependency olarak ekler. React Native autolinking mekanizması (`react-native.config.js`) podspec'i otomatik bulur ve bağımlılıkları ekler.
 
-```ruby
-pod 'AmazonIVSBroadcast', '1.37.0'
-```
-
-2. Pod'ları yükleyin:
+**Kurulum:**
 
 ```bash
-cd ios && pod install && cd ..
+cd ios
+pod install
+cd ..
 ```
 
-3. `Info.plist` dosyanıza kamera ve mikrofon izinlerini ekleyin:
+**Not:** Expo projelerinde de aynı şekilde çalışır. Expo'nun autolinking mekanizması React Native'in autolinking'ini kullanır.
+
+**Sorun yaşıyorsanız:**
+
+1. Podfile'ınızın en üstünde CocoaPods source'unun olduğundan emin olun:
+```ruby
+source 'https://cdn.cocoapods.org/'
+```
+
+2. Pod cache'ini temizleyin:
+```bash
+cd ios
+rm -rf Pods Podfile.lock
+pod cache clean --all
+pod install --repo-update
+cd ..
+```
+
+3. Xcode'u kapatıp tekrar açın
+
+`Info.plist` dosyanıza kamera ve mikrofon izinlerini ekleyin:
 
 ```xml
 <key>NSCameraUsageDescription</key>
@@ -84,7 +74,7 @@ cd ios && pod install && cd ..
 
 ## Kullanım
 
-### Temel Kullanım
+### Temel Örnek
 
 ```typescript
 import IVSBroadcast, { PreviewView } from '@abdurrahman-dev/react-native-ivs-broadcast';
@@ -107,11 +97,6 @@ function BroadcastScreen() {
           bitrate: 2500000,
           fps: 30,
         },
-        audioConfig: {
-          bitrate: 128000,
-          sampleRate: 44100,
-          channels: 2,
-        },
       });
       setSessionId(session.sessionId);
     };
@@ -119,38 +104,20 @@ function BroadcastScreen() {
     initSession();
 
     // Event listener'ları ekle
-    const stateCleanup = IVSBroadcast.addListener('onStateChanged', (state) => {
-      console.log('Broadcast state:', state);
+    const cleanup = IVSBroadcast.addListener('onStateChanged', (state) => {
       setIsBroadcasting(state.isBroadcasting);
     });
 
-    const errorCleanup = IVSBroadcast.addListener('onError', (error) => {
-      console.error('Broadcast error:', error);
-    });
-
-    // Cleanup
     return () => {
-      stateCleanup();
-      errorCleanup();
+      cleanup();
       if (sessionId) {
         IVSBroadcast.destroySession(sessionId);
       }
     };
   }, []);
 
-  const handleStartStop = async () => {
-    if (!sessionId) return;
-    
-    if (isBroadcasting) {
-      await IVSBroadcast.stopBroadcast(sessionId);
-    } else {
-      await IVSBroadcast.startBroadcast(sessionId);
-    }
-  };
-
   return (
     <View style={styles.container}>
-      {/* Kamera Preview */}
       <PreviewView
         sessionId={sessionId}
         aspectMode="fill"
@@ -158,189 +125,102 @@ function BroadcastScreen() {
         style={styles.preview}
       />
       
-      <View style={styles.controls}>
-        <Button
-          title={isBroadcasting ? 'Yayını Durdur' : 'Yayını Başlat'}
-          onPress={handleStartStop}
-        />
-        <Button
-          title="Kamera Değiştir"
-          onPress={() => sessionId && IVSBroadcast.switchCamera(sessionId)}
-        />
-      </View>
+      <Button
+        title={isBroadcasting ? 'Durdur' : 'Başlat'}
+        onPress={() => {
+          if (sessionId) {
+            isBroadcasting
+              ? IVSBroadcast.stopBroadcast(sessionId)
+              : IVSBroadcast.startBroadcast(sessionId);
+          }
+        }}
+      />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  preview: { flex: 1 },
-  controls: { padding: 20, gap: 10 },
-});
 ```
 
 ### PreviewView Component
 
-Yayıncının kamera görüntüsünü önizlemek için kullanılır.
-
 ```typescript
-import { PreviewView } from '@abdurrahman-dev/react-native-ivs-broadcast';
-
 <PreviewView
-  sessionId={sessionId}      // Broadcast session ID (zorunlu)
+  sessionId={sessionId}      // Zorunlu
   aspectMode="fill"          // 'fit' veya 'fill' (varsayılan: 'fill')
-  isMirrored={true}          // Görüntüyü aynala (varsayılan: true)
-  style={{ flex: 1 }}        // View stili
+  isMirrored={true}          // Aynalama (varsayılan: true)
+  style={{ flex: 1 }}
 />
 ```
 
-**Props:**
-- `sessionId` (string, zorunlu): `createSession` ile oluşturulan session ID
-- `aspectMode` ('fit' | 'fill', opsiyonel): Görüntü sığdırma modu
-- `isMirrored` (boolean, opsiyonel): Ön kamera için aynalama (varsayılan: true)
-- `style` (ViewStyle, opsiyonel): Container view stili
+## API
 
-### API Referansı
+### Session Yönetimi
 
-#### `createSession(config: IVSBroadcastConfig): Promise<IVSBroadcastSession>`
-
-Yeni bir broadcast session oluşturur.
-
-**Parametreler:**
-- `config.rtmpUrl` (string, zorunlu): RTMP stream URL'i
-- `config.streamKey` (string, opsiyonel): Stream key
-- `config.videoConfig` (VideoConfig, opsiyonel): Video konfigürasyonu
-- `config.audioConfig` (AudioConfig, opsiyonel): Audio konfigürasyonu
-
-**Dönen değer:** `{ sessionId: string }`
-
-#### `startBroadcast(sessionId: string): Promise<void>`
-
-Broadcast'i başlatır.
-
-#### `stopBroadcast(sessionId: string): Promise<void>`
-
-Broadcast'i durdurur.
-
-#### `pauseBroadcast(sessionId: string): Promise<void>`
-
-Broadcast'i duraklatır.
-
-#### `resumeBroadcast(sessionId: string): Promise<void>`
-
-Duraklatılmış broadcast'i devam ettirir.
-
-#### `destroySession(sessionId: string): Promise<void>`
-
-Session'ı yok eder ve kaynakları temizler.
-
-#### `getState(sessionId: string): Promise<BroadcastState>`
-
-Broadcast durumunu alır.
-
-**Dönen değer:**
 ```typescript
-{
-  isBroadcasting: boolean;
-  isPaused: boolean;
-  error?: string;
-}
+// Session oluştur
+const session = await IVSBroadcast.createSession({
+  rtmpUrl: 'rtmp://...',
+  streamKey: '...',
+  videoConfig: { width: 1280, height: 720, bitrate: 2500000, fps: 30 },
+  audioConfig: { bitrate: 128000, sampleRate: 44100 },
+});
+
+// Yayını başlat/durdur
+await IVSBroadcast.startBroadcast(sessionId);
+await IVSBroadcast.stopBroadcast(sessionId);
+
+// Session'ı yok et
+await IVSBroadcast.destroySession(sessionId);
 ```
 
-#### `switchCamera(sessionId: string): Promise<void>`
+### Kamera Kontrolü
 
-Kamerayı değiştirir (ön ↔ arka).
+```typescript
+// Kamera değiştir
+await IVSBroadcast.switchCamera(sessionId);
 
-#### `setCameraPosition(sessionId: string, position: 'front' | 'back'): Promise<void>`
+// Kamera pozisyonu ayarla
+await IVSBroadcast.setCameraPosition(sessionId, 'front');
+await IVSBroadcast.setCameraPosition(sessionId, 'back');
+```
 
-Kamera pozisyonunu ayarlar.
+### Mikrofon Kontrolü
 
-#### `setMuted(sessionId: string, muted: boolean): Promise<void>`
+```typescript
+// Mikrofonu sessize al/aç
+await IVSBroadcast.setMuted(sessionId, true);
+await IVSBroadcast.setMuted(sessionId, false);
 
-Mikrofonu sessize alır veya açar.
-
-#### `isMuted(sessionId: string): Promise<boolean>`
-
-Mikrofonun sessize alınıp alınmadığını kontrol eder.
-
-#### `updateVideoConfig(sessionId: string, config: VideoConfig): Promise<void>`
-
-Video konfigürasyonunu günceller.
-
-#### `updateAudioConfig(sessionId: string, config: AudioConfig): Promise<void>`
-
-Audio konfigürasyonunu günceller.
+// Mikrofon durumunu kontrol et
+const isMuted = await IVSBroadcast.isMuted(sessionId);
+```
 
 ### Event Listener'lar
 
-#### `onStateChanged`
-
-Broadcast durumu değiştiğinde tetiklenir.
-
 ```typescript
-IVSBroadcast.addListener('onStateChanged', (state: BroadcastState) => {
-  console.log('State:', state);
+// Durum değişiklikleri
+IVSBroadcast.addListener('onStateChanged', (state) => {
+  console.log('Broadcasting:', state.isBroadcasting);
 });
-```
 
-#### `onError`
-
-Hata oluştuğunda tetiklenir.
-
-```typescript
-IVSBroadcast.addListener('onError', (error: { message: string; code?: string }) => {
-  console.error('Error:', error);
+// Hata yönetimi
+IVSBroadcast.addListener('onError', (error) => {
+  console.error('Error:', error.message);
 });
-```
 
-#### `onNetworkHealth`
-
-Network sağlık durumu güncellendiğinde tetiklenir.
-
-```typescript
-IVSBroadcast.addListener('onNetworkHealth', (health: NetworkHealth) => {
-  console.log('Network quality:', health.networkQuality);
-  console.log('Uplink bandwidth:', health.uplinkBandwidth);
-  console.log('RTT:', health.rtt);
+// Network sağlık durumu (iOS)
+IVSBroadcast.addListener('onNetworkHealth', (health) => {
+  console.log('Quality:', health.networkQuality);
 });
-```
 
-#### `onAudioStats`
-
-Audio istatistikleri güncellendiğinde tetiklenir.
-
-```typescript
-IVSBroadcast.addListener('onAudioStats', (stats: AudioStats) => {
+// İstatistikler (iOS)
+IVSBroadcast.addListener('onAudioStats', (stats) => {
   console.log('Audio bitrate:', stats.bitrate);
-  console.log('Sample rate:', stats.sampleRate);
+});
+
+IVSBroadcast.addListener('onVideoStats', (stats) => {
+  console.log('Video bitrate:', stats.bitrate, 'FPS:', stats.fps);
 });
 ```
-
-#### `onVideoStats`
-
-Video istatistikleri güncellendiğinde tetiklenir.
-
-```typescript
-IVSBroadcast.addListener('onVideoStats', (stats: VideoStats) => {
-  console.log('Video bitrate:', stats.bitrate);
-  console.log('FPS:', stats.fps);
-  console.log('Resolution:', stats.width, 'x', stats.height);
-});
-```
-
-### Listener'ları Temizleme
-
-```typescript
-// Belirli bir listener'ı kaldır
-IVSBroadcast.removeListener('onStateChanged', callback);
-
-// Tüm listener'ları kaldır
-IVSBroadcast.removeAllListeners();
-```
-
-## Type Definitions
-
-Paket TypeScript desteği ile birlikte gelir. Tüm type tanımlamaları `types.ts` dosyasında bulunur.
 
 ## Gereksinimler
 
@@ -352,11 +232,6 @@ Paket TypeScript desteği ile birlikte gelir. Tüm type tanımlamaları `types.t
 
 MIT
 
-## Katkıda Bulunma
-
-Katkılarınızı bekliyoruz! Lütfen pull request göndermeden önce mevcut kod stilini takip ettiğinizden emin olun.
-
 ## Destek
 
-Sorunlarınız için GitHub Issues kullanabilirsiniz.
-
+Sorunlarınız için [GitHub Issues](https://github.com/abdurrahman-dev/react-native-ivs-broadcast/issues) kullanabilirsiniz.

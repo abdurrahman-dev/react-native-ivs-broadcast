@@ -3,7 +3,8 @@ module.exports = {
     platforms: {
       android: {
         sourceDir: "./android",
-        packageImportPath: "import com.reactnativeivsbroadcast.IVSBroadcastPackage;",
+        packageImportPath:
+          "import com.reactnativeivsbroadcast.IVSBroadcastPackage;",
         packageInstance: "new IVSBroadcastPackage()",
       },
       ios: {

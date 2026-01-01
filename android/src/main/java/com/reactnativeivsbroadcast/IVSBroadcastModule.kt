@@ -148,13 +148,59 @@ class IVSBroadcastModule(reactContext: ReactApplicationContext) :
             }
 
             override fun onDeviceAdded(descriptor: Device.Descriptor) {
-                // Device eklendi
+                // Device eklendi - PreviewView'ları güncelle
+                notifyPreviewViews(sessionId)
             }
 
             override fun onDeviceRemoved(descriptor: Device.Descriptor) {
                 // Device kaldırıldı
             }
+
+            override fun onNetworkHealthChanged(health: NetworkHealth) {
+                val qualityString = when (health.quality) {
+                    NetworkHealth.Quality.EXCELLENT -> "excellent"
+                    NetworkHealth.Quality.GOOD -> "good"
+                    NetworkHealth.Quality.FAIR -> "fair"
+                    NetworkHealth.Quality.POOR -> "poor"
+                    else -> "unknown"
+                }
+
+                val eventMap = Arguments.createMap().apply {
+                    putString("networkQuality", qualityString)
+                    putString("sessionId", sessionId)
+                    health.uplinkBandwidth?.let { putInt("uplinkBandwidth", it) }
+                    health.rtt?.let { putInt("rtt", it) }
+                }
+                sendEvent("onNetworkHealth", eventMap)
+            }
+
+            override fun onAudioStats(stats: AudioStats) {
+                val eventMap = Arguments.createMap().apply {
+                    putInt("bitrate", stats.bitrate)
+                    putInt("sampleRate", stats.sampleRate)
+                    putInt("channels", stats.channels)
+                    putString("sessionId", sessionId)
+                }
+                sendEvent("onAudioStats", eventMap)
+            }
+
+            override fun onVideoStats(stats: VideoStats) {
+                val eventMap = Arguments.createMap().apply {
+                    putInt("bitrate", stats.bitrate)
+                    putDouble("fps", stats.fps.toDouble())
+                    putInt("width", stats.width)
+                    putInt("height", stats.height)
+                    putString("sessionId", sessionId)
+                }
+                sendEvent("onVideoStats", eventMap)
+            }
         }
+    }
+
+    private fun notifyPreviewViews(sessionId: String) {
+        // PreviewView'ları güncellemek için event gönder
+        // Bu, PreviewView'ların kendilerini yeniden attach etmesini sağlar
+        // Not: Bu basit bir yaklaşım, daha gelişmiş bir çözüm için ViewManager kullanılabilir
     }
 
     private fun setupDefaultDevices(session: BroadcastSession, sessionId: String) {

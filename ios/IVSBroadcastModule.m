@@ -554,11 +554,89 @@ RCT_EXPORT_METHOD(updateAudioConfig:(NSString *)sessionId
 }
 
 - (void)broadcastSession:(IVSBroadcastSession *)session didAddDevice:(IVSDevice *)device {
-    // Device eklendi
+    // Device eklendi - PreviewView'ları güncelle
+    NSString *sessionId = [self sessionIdForSession:session];
+    if (sessionId && device.descriptor.type == IVSDeviceTypeCamera) {
+        // Kamera değişti, PreviewView'ları bilgilendir
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"IVSCameraDeviceChanged" 
+                                                                object:nil 
+                                                              userInfo:@{@"sessionId": sessionId}];
+    }
 }
 
 - (void)broadcastSession:(IVSBroadcastSession *)session didRemoveDevice:(IVSDeviceDescriptor *)descriptor {
     // Device kaldırıldı
+}
+
+- (void)broadcastSession:(IVSBroadcastSession *)session didChangeNetworkHealth:(IVSNetworkHealth *)networkHealth {
+    if (!self.hasListeners) return;
+    
+    NSString *sessionId = [self sessionIdForSession:session];
+    if (!sessionId) return;
+    
+    NSString *qualityString = @"unknown";
+    switch (networkHealth.quality) {
+        case IVSNetworkQualityExcellent:
+            qualityString = @"excellent";
+            break;
+        case IVSNetworkQualityGood:
+            qualityString = @"good";
+            break;
+        case IVSNetworkQualityFair:
+            qualityString = @"fair";
+            break;
+        case IVSNetworkQualityPoor:
+            qualityString = @"poor";
+            break;
+        default:
+            break;
+    }
+    
+    NSMutableDictionary *healthDict = [NSMutableDictionary dictionary];
+    healthDict[@"networkQuality"] = qualityString;
+    healthDict[@"sessionId"] = sessionId;
+    
+    if (networkHealth.uplinkBandwidth > 0) {
+        healthDict[@"uplinkBandwidth"] = @(networkHealth.uplinkBandwidth);
+    }
+    if (networkHealth.rtt > 0) {
+        healthDict[@"rtt"] = @(networkHealth.rtt);
+    }
+    
+    [self sendEventWithName:@"onNetworkHealth" body:healthDict];
+}
+
+- (void)broadcastSession:(IVSBroadcastSession *)session didEmitAudioStats:(IVSAudioStats *)audioStats {
+    if (!self.hasListeners) return;
+    
+    NSString *sessionId = [self sessionIdForSession:session];
+    if (!sessionId) return;
+    
+    NSDictionary *statsDict = @{
+        @"bitrate": @(audioStats.bitrate),
+        @"sampleRate": @(audioStats.sampleRate),
+        @"channels": @(audioStats.channels),
+        @"sessionId": sessionId
+    };
+    
+    [self sendEventWithName:@"onAudioStats" body:statsDict];
+}
+
+- (void)broadcastSession:(IVSBroadcastSession *)session didEmitVideoStats:(IVSVideoStats *)videoStats {
+    if (!self.hasListeners) return;
+    
+    NSString *sessionId = [self sessionIdForSession:session];
+    if (!sessionId) return;
+    
+    NSDictionary *statsDict = @{
+        @"bitrate": @(videoStats.bitrate),
+        @"fps": @(videoStats.fps),
+        @"width": @(videoStats.width),
+        @"height": @(videoStats.height),
+        @"sessionId": sessionId
+    };
+    
+    [self sendEventWithName:@"onVideoStats" body:statsDict];
 }
 
 - (NSString *)sessionIdForSession:(IVSBroadcastSession *)session {

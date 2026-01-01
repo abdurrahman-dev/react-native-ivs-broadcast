@@ -15,8 +15,33 @@
         _aspectMode = @"fill";
         _isMirrored = YES;
         [self setupPreviewView];
+        [self setupNotifications];
     }
     return self;
+}
+
+- (void)setupNotifications {
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(handleCameraDeviceChanged:)
+                                                 name:@"IVSCameraDeviceChanged"
+                                               object:nil];
+}
+
+- (void)handleCameraDeviceChanged:(NSNotification *)notification {
+    NSString *changedSessionId = notification.userInfo[@"sessionId"];
+    if ([changedSessionId isEqualToString:self.sessionId]) {
+        // Bu session'ın kamerası değişti, preview'ı güncelle
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self attachToSession];
+        });
+    }
+}
+
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    if (self.imageDevice) {
+        [self.imageDevice setPreviewView:nil];
+    }
 }
 
 - (void)setupPreviewView {
@@ -80,7 +105,17 @@
     
     IVSBroadcastSession *session = [module sessionForId:_sessionId];
     if (!session) {
+        // Session henüz hazır değilse tekrar dene
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self attachToSession];
+        });
         return;
+    }
+    
+    // Önceki preview'ı temizle
+    if (self.imageDevice) {
+        [self.imageDevice setPreviewView:nil];
+        self.imageDevice = nil;
     }
     
     // Session'dan kamera device'ını al
@@ -94,6 +129,13 @@
                 break;
             }
         }
+    }
+    
+    // Eğer kamera bulunamadıysa, biraz bekleyip tekrar dene
+    if (!self.imageDevice) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self attachToSession];
+        });
     }
 }
 
@@ -109,11 +151,6 @@
     [super removeFromSuperview];
 }
 
-- (void)dealloc {
-    if (self.imageDevice) {
-        [self.imageDevice setPreviewView:nil];
-    }
-}
 
 @end
 
