@@ -3,7 +3,7 @@
 
 static IVSBroadcastModule *sharedInstance = nil;
 
-@interface IVSBroadcastModule () <IVSBroadcastSession.Delegate>
+@interface IVSBroadcastModule () <IVSBroadcastSessionDelegate>
 @property (nonatomic, strong) NSMutableDictionary<NSString *, IVSBroadcastSession *> *sessions;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSURL *> *sessionUrls;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *currentCameraPosition;
@@ -520,7 +520,7 @@ RCT_EXPORT_METHOD(updateAudioConfig:(NSString *)sessionId
     });
 }
 
-#pragma mark - IVSBroadcastSession.Delegate
+#pragma mark - IVSBroadcastSessionDelegate
 
 - (void)broadcastSession:(IVSBroadcastSession *)session didChangeState:(IVSBroadcastSessionState)state {
     if (!self.hasListeners) return;
